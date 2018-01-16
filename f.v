@@ -331,12 +331,19 @@ Module expr.
     - auto.
   Qed.
 
+  Lemma wf_tyshift_iff :
+    forall e n c d,
+      wf n e <-> wf n (tyshift c d e).
+  Proof.
+    induction e; simpl; intros n c d; firstorder.
+  Qed.
+
   Lemma wf_tyshift :
     forall e n c d,
-      wf n e ->
-      wf n (tyshift c d e).
+      wf n e -> wf n (tyshift c d e).
   Proof.
-    induction e; simpl; intros n c d WF; intuition.
+    intros.
+    now apply wf_tyshift_iff.
   Qed.
 
   Lemma wf_subst :
@@ -981,7 +988,6 @@ Fixpoint V ty (d : list semtype.t) e :=
       end
     | type.arrow ty1 ty2 =>
       expr.wf 0 e /\
-      expr.tywf (length d) e /\
       exists body ty,
           e = expr.abs body ty /\
           forall e2,
@@ -989,7 +995,6 @@ Fixpoint V ty (d : list semtype.t) e :=
             terminating.t (V ty2 d) (expr.subst [e2] body)
     | type.all ty' =>
       expr.wf 0 e /\
-      expr.tywf (length d) e /\
       exists body,
         e = expr.tyabs body /\
         forall (S : semtype.t),
@@ -1011,9 +1016,9 @@ Proof.
   - break_match; intuition.
     assert (semtype.wf t) by (eapply Forall_nth; eauto).
     firstorder.
-  - destruct HV as [WF [tyWF [body [ty [E H]]]]].
+  - destruct HV as [WF [body [ty [E H]]]].
     subst. constructor.
-  - destruct HV as [WF [tyWF [body [E H]]]].
+  - destruct HV as [WF [body [E H]]].
     subst. constructor.
 Qed.
 
@@ -1027,20 +1032,6 @@ Proof.
   destruct ty; cbn [V]; intuition.
   break_match; intuition.
   assert (semtype.wf t) by (eapply Forall_nth; eauto).
-  firstorder.
-Qed.
-
-Lemma V_tywf :
-  forall ty d v,
-    Forall semtype.wf d ->
-    V ty d v ->
-    expr.tywf (length d) v.
-Proof.
-  intros ty d v F.
-  destruct ty; cbn [V]; intuition.
-  break_match; intuition.
-  assert (semtype.wf t) by (eapply Forall_nth; eauto).
-  apply expr.tywf_weaken with (n := 0); auto with arith.
   firstorder.
 Qed.
 
@@ -1080,13 +1071,94 @@ Proof.
   now induction Star; eauto using E_step.
 Qed.
 
+Lemma type_shift_wf_inv :
+  forall ty n c d,
+    type.wf n (type.shift c d ty) ->
+    type.wf (max (min n c) (n - d)) ty.
+Proof.
+  induction ty; simpl; intros n c d WF; intuition; eauto.
+  - destruct (Nat.ltb_spec alpha c).
+    + pose proof Nat.max_spec (min n c) (n - d).
+      pose proof Nat.min_spec n c.
+      omega.
+    + pose proof Nat.max_spec (min n c) (n - d).
+      pose proof Nat.min_spec n c.
+      omega.
+  - apply IHty in WF.
+    eapply type.wf_weaken; [|eauto].
+    pose proof Nat.max_spec (min (S n) (S c)) (S n - d).
+    pose proof Nat.max_spec (min n c) (n - d).
+    pose proof Nat.min_spec (S n) (S c).
+    pose proof Nat.min_spec n c.
+    omega.
+Qed.
+
+Lemma tyshift_tywf_inv :
+  forall e n c d,
+    expr.tywf n (expr.tyshift c d e) ->
+    expr.tywf (max (min n c) (n - d)) e.
+Proof.
+  induction e; simpl; intros n c d WF; intuition; eauto.
+  - auto using type_shift_wf_inv.
+  - eapply expr.tywf_weaken; [|eauto].
+    pose proof Nat.max_spec (min (S n) (S c)) (S n - d).
+    pose proof Nat.max_spec (min n c) (n - d).
+    pose proof Nat.min_spec (S n) (S c).
+    pose proof Nat.min_spec n c.
+    omega.
+  - auto using type_shift_wf_inv.
+Qed.
+
+Lemma tyshift_tywf_inv' :
+  forall e c d,
+    expr.tywf 0 (expr.tyshift c d e) ->
+    expr.tywf 0 e.
+Proof.
+  intros.
+  now apply (tyshift_tywf_inv e 0 c d).
+Qed.
+
 Lemma V_tyshift :
   forall ty D c d v,
     Forall semtype.wf D ->
-    V ty D v ->
-    V ty D (expr.tyshift c d v).
+    V ty D v <-> V ty D (expr.tyshift c d v).
 Proof.
-Admitted.
+  induction ty; intros D c d v F.
+  - simpl. break_match; [|now intuition].
+    assert (semtype.wf t) as T by (eapply Forall_nth; eauto).
+    unfold semtype.wf in T.
+    split; intros TV.
+    + destruct (T _ TV) as [Valv [WF TWF]].
+      erewrite expr.tyshift_nop; [assumption| | exact TWF]; omega.
+    + destruct (T _ TV) as [Valv [WF TWF]].
+      eapply tyshift_tywf_inv' in TWF.
+      now rewrite expr.tyshift_nop with (n := 0) in * by auto with *.
+  - cbn [V].
+    rewrite <- expr.wf_tyshift_iff.
+    split; intros [WF [body [ty [? Vbody]]]]; subst; (split; [assumption|]);
+      cbn [expr.tyshift].
+    + do 2 eexists; split; [reflexivity|].
+      admit.
+    + destruct v; simpl in H; try discriminate.
+      inversion H; subst. clear H.
+      do 2 eexists; split; [reflexivity|].
+      intros v2 V2.
+      apply Vbody in V2.
+      destruct V2 as [v2' [Star2' [Val2' V2']]].
+      pose proof expr.tyshift_subst v c d [v2] as SS.
+      cbn[map] in SS.
+
+
+Lemma subst_tyshift :
+  forall e rho c d,
+    expr.subst rho (expr.tyshift c d
+
+
+
+
+
+
+
 
 Lemma V_shift :
   forall ty d1 d2 d3 v,
@@ -1094,28 +1166,19 @@ Lemma V_shift :
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty; simpl; intros d1 d2 d3 v F; split.
-  - intros Vv.
-    destruct (nth_error (d1 ++ d3) alpha) eqn:NE; intuition.
-    assert (semtype.wf t) by (eapply Forall_nth; eauto).
+  induction ty; intros d1 d2 d3 v F; [|split|].
+  - simpl.
     destruct (Nat.ltb_spec alpha (length d1)).
-    + rewrite nth_error_app1 in * by assumption.
-      now rewrite NE.
-    + rewrite nth_error_app2 in * by omega.
-      rewrite nth_error_app2 by omega.
+    + now rewrite !nth_error_app1 by assumption.
+    + rewrite !nth_error_app2 by omega.
       replace (length d2 + alpha - length d1 - length d2)
          with (alpha - length d1) by omega.
-      now rewrite NE.
-  - admit.
+      now auto.
   - intros Vv.
-    destruct Vv as [WFe [TWFe [body [ty1' [? Ebody]]]]].
-    split; [|split].
+    destruct Vv as [WFe [body [ty1' [? Ebody]]]].
+    split.
     + auto using expr.wf_tyshift.
-    + rewrite !app_length in *.
-      eapply expr.tywf_weaken; [|now eauto].
-      omega.
     + subst v.
-      rewrite !app_length in *.
       do 2 eexists.
       split; [reflexivity|].
       intros v2 V2.
@@ -1127,16 +1190,48 @@ Proof.
       destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
       eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
       exists v2'; intuition.
-  -
-
-Admitted.
+  - simpl.
+    intros Vv.
+    destruct Vv as [WF [body [ty [? Hv]]]].
+    intuition.
+    subst v.
+    do 2 eexists.
+    split; [reflexivity|].
+    intros v2 V2.
+    assert (E (type.shift (length d1) (length d2) ty2) (d1 ++ d2 ++ d3) (expr.subst [v2] body))
+           as Ev2.
+    {
+      eapply Hv.
+      apply IHty1; auto.
+    }
+    destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
+    eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
+    exists v2'; intuition.
+  - simpl.
+    split; intros Vv; destruct Vv as [Wf [body [? Hv]]];
+      split; auto; subst v; eexists; (split; [reflexivity|]);
+        intros S WFS.
+    + destruct (Hv _ WFS) as [v2 [Star2 [Val2 V2]]].
+      exists v2. intuition.
+      apply IHty with (d1 := S :: d1); auto.
+      simpl. constructor; auto.
+    + destruct (Hv _ WFS) as [v2 [Star2 [Val2 V2]]].
+      exists v2. intuition.
+      specialize (IHty (S :: d1) d2 d3 v2).
+      apply IHty; auto.
+      simpl. constructor; auto.
+Qed.
 
 Lemma V_shift' :
   forall ty S d v,
+    Forall semtype.wf d ->
     V ty d v ->
     V (type.shift 0 1 ty) (S :: d) (expr.tyshift 0 1 v).
-Admitted.
-*)
+Proof.
+  intros.
+  apply V_shift with (d1 := []) (d2 := [S]) (d3 := d); auto.
+  apply V_tyshift; auto.
+Qed.
 
 Theorem fundamental :
   forall n G e ty,
@@ -1153,7 +1248,7 @@ Proof.
     now rewrite Hv.
   - apply V_E; auto.
     cbn [expr.subst V].
-    split; [|split].
+    split.
     + cbn [expr.wf].
       apply expr.wf_subst.
       * apply has_type.t_expr_wf in H.
@@ -1167,6 +1262,7 @@ Proof.
         destruct (Forall2_nth_error_l WFg Hnx) as [y [Hny Vxy]].
         apply V_wf in Vxy; auto.
         now apply expr.wf_shift with (c := 0) (d := 1).
+(*
     + cbn [expr.tywf]. intuition.
       apply expr.tywf_subst.
       * eapply has_type.t_expr_tywf; eauto.
@@ -1177,7 +1273,8 @@ Proof.
         destruct (Forall2_nth_error_l WFg Hnx) as [y [Hny Vxy]].
         apply expr.tywf_shift.
         eapply V_tywf; eauto.
-    + eexists. split; [reflexivity|].
+*)
+    + do 2 eexists. split; [reflexivity|].
       intros v2 V2.
       rewrite expr.subst_subst.
       * apply IHt; auto.
@@ -1208,7 +1305,7 @@ Proof.
     specialize (IHt2 d g eq_refl WFd WFg).
     destruct IHt1 as [v1 [S1 [Val1 V1]]].
     destruct IHt2 as [v2 [S2 [Val2 V2]]].
-    destruct V1 as [WF1 [TWF1 [body [? H1]]]].
+    destruct V1 as [WF1 [body [ty [? H1]]]].
     subst v1.
     apply E_star with (e' := expr.subst [v2] body); [|now eauto].
     eapply step.star_trans.
@@ -1221,7 +1318,7 @@ Proof.
     constructor.
   - apply V_E; [assumption|].
     cbn [expr.subst V].
-    split; [|split].
+    split.
     + cbn [expr.wf]. apply expr.wf_subst.
       * eapply has_type.t_expr_wf in H.
         rewrite map_length in *.
@@ -1232,6 +1329,7 @@ Proof.
         destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vy]].
         apply expr.wf_tyshift.
         eapply V_wf; eauto.
+(*
     + cbn [expr.tywf].
       apply expr.tywf_subst.
       * eapply has_type.t_expr_tywf; eauto.
@@ -1241,6 +1339,7 @@ Proof.
         destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vy]].
         apply expr.tywf_tyshift with (c := 0) (d := 1).
         eapply V_tywf; eauto.
+*)
     + eexists. split; [reflexivity|].
       intros S SWF.
       apply IHt.
@@ -1250,7 +1349,7 @@ Proof.
         eapply Forall2_impl; [|now eauto].
         simpl.
         intros ty' e' V'.
-        now apply V_shift'.
+        now apply V_shift'; auto.
   -
 
-
+Admitted.
