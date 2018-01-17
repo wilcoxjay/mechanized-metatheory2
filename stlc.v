@@ -1,253 +1,57 @@
-Require Import util.
+Require Import util abt.
+
+Module tyop.
+  Inductive t' :=
+  | unit
+  | arrow
+  .
+  Definition t := t'.
+
+  Definition arity (op : t) : arity.t :=
+    match op with
+    | unit => []
+    | arrow => [0; 0]
+    end.
+
+  Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
+    decide equality.
+  Defined.
+
+End tyop.
+
+Module exprop.
+  Inductive t' :=
+  | abs
+  | app
+  | tt
+  .
+  Definition t := t'.
+
+  Definition arity (op : t) : arity.t :=
+    match op with
+    | abs => [1]
+    | app => [0; 0]
+    | tt => []
+    end.
+
+  Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
+    decide equality.
+  Defined.
+End exprop.
 
 Module type.
-  Inductive t :=
-  | unit
-  | arrow : t -> t -> t
-  .
+   Include abt.abt tyop.
+   Notation unit := (op tyop.unit []).
+   Notation arrow ty1 ty2 := (op tyop.arrow [bind 0 ty1; bind 0 ty2]).
 End type.
 
 Module expr.
-  Inductive t :=
-  | var : nat -> t
-  | tt : t
-  | abs : t -> type.t -> t
-  | app : t -> t -> t
-  .
-
-  Fixpoint wf (c : nat) (e : t) : Prop :=
-    match e with
-    | var x => x < c
-    | tt => True
-    | abs e' ty => wf (S c) e'
-    | app e1 e2 => wf c e1 /\ wf c e2
-    end.
-
-  Fixpoint shift (c d : nat) (e : t) : t :=
-    match e with
-    | var x => var (if x <? c then x else d + x)
-    | tt => tt
-    | abs e' ty => abs (shift (S c) d e') ty
-    | app e1 e2 => app (shift c d e1) (shift c d e2)
-    end.
-
-  Lemma wf_shift :
-    forall e c d n,
-      wf n e ->
-      wf (d + n) (shift c d e).
-  Proof.
-    induction e; simpl; intros c d m H.
-    - destruct (Nat.ltb_spec n c); omega.
-    - auto.
-    - rewrite plus_n_Sm. auto.
-    - intuition.
-  Qed.
-
-  Lemma shift_0 :
-    forall e c,
-      shift c 0 e = e.
-  Proof.
-    induction e; simpl; intros c.
-    - destruct (_ <? _); reflexivity.
-    - reflexivity.
-    - now f_equal; auto.
-    - now f_equal; auto.
-  Qed.
-
-  Fixpoint subst (rho : list t) (e : t) : t :=
-    match e with
-    | var x => match List.nth_error rho x with
-               | None => var x
-               | Some e' => e'
-               end
-    | tt => tt
-    | abs e ty => abs (subst (var 0 :: List.map (shift 0 1) rho) e) ty
-    | app e1 e2 => app (subst rho e1) (subst rho e2)
-    end.
-
-  Fixpoint identity_subst (n : nat) : list expr.t :=
-    match n with
-    | 0 => []
-    | S n => var 0 :: List.map (shift 0 1) (identity_subst n)
-    end.
-
-  Lemma identity_subst_length : forall n, length (identity_subst n) = n.
-  Proof.
-    induction n; simpl.
-    - auto.
-    - rewrite map_length. auto using f_equal.
-  Qed.
-
-  Lemma nth_error_identity_subst :
-    forall n x y,
-      nth_error (identity_subst n) x = Some y ->
-      y = var x.
-  Proof.
-    induction n; intros x y NE; destruct x; simpl in *; try congruence.
-    rewrite nth_error_map in NE.
-    break_match; try discriminate.
-    apply IHn in Heqo.
-    subst. simpl in *. congruence.
-  Qed.
-
-  Lemma subst_identity :
-    forall e n,
-      subst (identity_subst n) e = e.
-  Proof.
-    induction e as [x| | |]; intros n; cbn [subst].
-    - destruct (nth_error (identity_subst n) x) eqn:E; auto.
-      now apply nth_error_identity_subst in E.
-    - now auto.
-    - f_equal.
-      now apply IHe with (n := (S n)).
-    - now f_equal; auto.
-  Qed.
-
-  Lemma subst_empty :
-    forall e,
-      subst [] e = e.
-  Proof.
-    intros e.
-    exact (subst_identity e 0).
-  Qed.
-
-  Lemma shift_shift :
-    forall e c1 d1 c2 d2,
-      c2 <= c1 ->
-      shift c2 d2 (shift c1 d1 e) =
-      shift (c1 + d2) d1 (shift c2 d2 e).
-  Proof.
-    induction e; simpl; intros c1 d1 c2 d2 LT.
-    - f_equal.
-      repeat match goal with
-      | [  |- context [ ?x <? ?y ] ] =>
-        destruct (Nat.ltb_spec x y)
-      end; omega.
-    - reflexivity.
-    - f_equal. now rewrite IHe by omega.
-    - f_equal; eauto.
-  Qed.
-  
-  Lemma shift_subst :
-    forall e c d rho,
-      wf (List.length rho) e ->
-      shift c d (subst rho e) =
-      subst (List.map (shift c d) rho) e.
-  Proof.
-    induction e; intros c d rho WF.
-    - simpl in *.
-      rewrite nth_error_map.
-      destruct (nth_error rho n) eqn:?.
-      + reflexivity.
-      + pose proof nth_error_Some rho n.
-        intuition.
-    - reflexivity.
-    - simpl. f_equal.
-      rewrite IHe by (simpl; rewrite map_length; assumption).
-      simpl.
-      f_equal. f_equal.
-      rewrite !map_map.
-      apply map_ext.
-      intros e'.
-      rewrite shift_shift with (c2 := 0) by omega.
-      f_equal. omega.
-    - simpl in *. f_equal; intuition.
-  Qed.
-  
-  Lemma subst_shift :
-    forall e r1 r2 r3,
-      wf (List.length (r1 ++ r3)) e ->
-      subst (r1 ++ r2 ++ r3) (shift (List.length r1) (List.length r2) e) =
-      subst (r1 ++ r3) e.
-  Proof.
-    induction e; simpl; intros r1 r2 r3 H.
-    - destruct (Nat.ltb_spec n (length r1)).
-      + now rewrite !nth_error_app1 by assumption.
-      + rewrite !nth_error_app2 by omega.
-        rewrite plus_comm.
-        rewrite Nat.add_sub_swap by assumption.
-        rewrite <- Nat.add_sub_assoc by omega.
-        rewrite Nat.sub_diag.
-        rewrite Nat.add_0_r.
-        break_match; auto.
-        pose proof nth_error_Some r3 (n - length r1).
-        rewrite !app_length in *.
-        intuition.
-    - reflexivity.
-    - f_equal.
-      rewrite !map_app.
-      rewrite !app_comm_cons.
-      erewrite <- IHe.
-      + f_equal. simpl.
-        now rewrite !map_length.
-      + simpl. now rewrite app_length, !map_length in *.
-    - f_equal; intuition.
-  Qed.
-  
-  Lemma subst_subst :
-    forall e rho1 rho2,
-      wf (List.length rho1) e ->
-      List.Forall (wf (List.length rho2)) rho1 ->
-      subst rho2 (subst rho1 e) =
-      subst (List.map (subst rho2) rho1) e.
-  Proof.
-    induction e; intros rho1 rho2 WF F.
-    - cbn [subst].
-      cbn [wf] in WF.
-      pose proof nth_error_Some rho1 n.
-      rewrite nth_error_map.
-      destruct (nth_error rho1 n) eqn:E; intuition congruence.
-    - reflexivity.
-    - cbn [subst].
-      erewrite IHe.
-      + f_equal. f_equal.
-        simpl. f_equal.
-        rewrite !map_map.
-        apply map_ext_in.
-        intros e' I.
-        assert (wf (length rho2) e') by (eapply Forall_forall; eauto).
-        rewrite shift_subst by assumption.
-        apply subst_shift with (r1 := []) (r2 := [var 0]).
-        simpl.
-        now rewrite map_length.
-      + simpl.
-        now rewrite map_length.
-      + simpl. constructor.
-        * rewrite map_length. simpl. omega.
-        * rewrite map_length.
-          rewrite Forall_map.
-          eapply Forall_impl; [|eauto].
-          intros e' H.
-          apply wf_shift with (d := 1); auto.
-    - simpl in *.
-      intuition.
-      now rewrite IHe1, IHe2 by auto.
-  Qed.
-
-  Lemma wf_subst :
-    forall e n rho,
-      wf (length rho) e ->
-      List.Forall (wf n) rho ->
-      wf n (subst rho e).
-  Proof.
-    induction e; simpl; intros x rho WF F.
-    - break_match.
-      + now eapply Forall_nth; eauto.
-      + pose proof nth_error_Some rho n.
-        intuition.
-    - auto.
-    - eapply IHe; eauto.
-      + simpl. now rewrite map_length.
-      + constructor.
-        * simpl. omega.
-        * rewrite Forall_map.
-          eapply Forall_impl; [|eauto].
-          intros.
-          now apply wf_shift with (d := 1).
-    - intuition eauto.
-  Qed.
-
+   Include abt.abt exprop.
+   Notation abs e := (op exprop.abs [bind 1 e]).
+   Notation app e1 e2 := (op exprop.app [bind 0 e1; bind 0 e2]).
+   Notation tt := (op exprop.tt []).
 End expr.
+
 
 Module has_type.
   Inductive t : list type.t -> expr.t -> type.t -> Prop :=
@@ -258,7 +62,7 @@ Module has_type.
       t G expr.tt type.unit
   | abs : forall G e ty1 ty2,
       t (ty1 :: G) e ty2 ->
-      t G (expr.abs e ty1) (type.arrow ty1 ty2)
+      t G (expr.abs e) (type.arrow ty1 ty2)
   | app : forall G e1 e2 ty1 ty2,
       t G e1 (type.arrow ty1 ty2) ->
       t G e2 ty1 ->
@@ -280,13 +84,10 @@ Lemma has_type_shift :
 Proof.
   induction 1; intros G1 G2 G' E; subst G.
   - constructor.
-    destruct (Nat.ltb_spec x (length G1)).
+    do_ltb.
     + now rewrite nth_error_app1 in * by assumption.
-    + rewrite nth_error_app2 in * by omega.
-      rewrite <- Nat.add_sub_assoc by assumption.
-      rewrite nth_error_app2 in * by omega.
-      rewrite Nat.add_sub_swap by reflexivity.
-      now rewrite Nat.sub_diag, Nat.add_0_l.
+    + rewrite !nth_error_app2 in * by omega.
+      now do_app2_minus.
   - constructor.
   - cbn [expr.shift].
     constructor.
@@ -336,7 +137,8 @@ Proof.
       * intros.
         apply has_type_shift_cons.
         eapply (Forall2_nth_error F); eauto.
-  - econstructor.
+  - cbn [expr.subst_binder]. rewrite expr.descend_0.
+    econstructor.
     + now apply IHt1.
     + now apply IHt2.
 Qed.
@@ -344,7 +146,7 @@ Qed.
 Module value.
   Inductive t : expr.t -> Prop :=
   | tt : t expr.tt
-  | abs : forall ty e, t (expr.abs e ty)
+  | abs : forall e, t (expr.abs e)
   .
 End value.
 
@@ -356,8 +158,8 @@ Module step.
   | app2  : forall e1 e2 e2',
       t e2 e2' ->
       t (expr.app e1 e2) (expr.app e1 e2')
-  | beta : forall ty e1 e2,
-      t (expr.app (expr.abs e1 ty) e2)
+  | beta : forall e1 e2,
+      t (expr.app (expr.abs e1) e2)
         (expr.subst [e2] e1)
   .
   Hint Constructors t.

@@ -4,6 +4,8 @@ Require Export Relations.Relations.
 Export ListNotations.
 Set Implicit Arguments.
 
+Hint Constructors Forall Forall2.
+
 Ltac break_match :=
   match goal with
   | [  |- context [ match ?X with _ => _ end ] ] => destruct X eqn:?
@@ -192,3 +194,39 @@ Proof.
   intros A B P Q l1 l2 H F.
   induction F; constructor; auto.
 Qed.
+
+Lemma app_comm_cons' :
+  forall A xs (y : A) zs,
+    xs ++ y :: zs = (xs ++ [y]) ++ zs.
+Proof.
+  intros.
+  now rewrite app_ass.
+Qed.
+
+Lemma Forall_app :
+  forall A (P : A -> Prop) l1 l2,
+    Forall P (l1 ++ l2) <-> (Forall P l1 /\ Forall P l2).
+Proof.
+  induction l1; simpl; intros l2; intuition;
+    try match goal with
+    | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
+    end; firstorder.
+Qed.
+
+Ltac do_ltb :=
+  match goal with
+  | [ |- context [ if ?x <? ?y then _ else _ ] ] =>
+    destruct (Nat.ltb_spec x y)
+  end.
+Ltac do_app2_minus :=
+  match goal with
+  | [  |- context [ ?x + ?r2 - ?r1 - ?r2 ] ] =>
+    replace (x + r2 - r1 - r2)
+    with (x - r1) by omega
+  end.
+
+Ltac do_nth_error_Some :=
+  match goal with
+  | [  |- context [ nth_error ?l ?n] ] => pose proof nth_error_Some l n
+  | [ H : context [ nth_error ?l ?n] |- _ ] => pose proof nth_error_Some l n
+  end.
