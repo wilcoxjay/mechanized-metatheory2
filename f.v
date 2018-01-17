@@ -237,60 +237,64 @@ Module type.
     - destruct (Nat.ltb_spec alpha c); omega.
     - eapply IHty; [|eauto]. omega.
   Qed.
+
+  Lemma shift_nop_d :
+    forall ty c,
+      shift c 0 ty = ty.
+  Proof.
+    induction ty; intros c; simpl; f_equal; auto.
+    break_match; auto.
+  Qed.
+
+  Lemma identity_subst_wf :
+    forall n,
+      Forall (wf n) (identity_subst n).
+  Proof.
+    induction n; simpl; constructor.
+    - simpl. omega.
+    - rewrite Forall_map. eapply Forall_impl; [|apply IHn].
+      intros ty WF.
+      now apply wf_shift with (c := 0) (d := 1).
+  Qed.
+
+  Lemma shift_merge :
+    forall e c d1 d2,
+      shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Proof.
+    induction e; intros c d1 d2; simpl.
+    - destruct (Nat.ltb_spec alpha c).
+      + destruct (Nat.ltb_spec alpha c); [reflexivity|omega].
+      + destruct (Nat.ltb_spec (d1 + alpha) c); f_equal; omega.
+    - f_equal; auto.
+    - f_equal. auto.
+  Qed.
 End type.
 
 Module expr.
   Inductive t :=
   | var (x : nat) : t
-  | abs : t -> type.t -> t
+  | abs : t -> t
   | app : t -> t -> t
   | tyabs : t -> t
-  | tyapp : t -> type.t -> t
+  | tyapp : t -> t
   .
-
-  Fixpoint tywf (n : nat) (e : t) :=
-    match e with
-    | var x => True
-    | abs e' ty => tywf n e' /\ type.wf n ty
-    | app e1 e2 => tywf n e1 /\ tywf n e2
-    | tyabs e' => tywf (S n) e'
-    | tyapp e' ty => tywf n e' /\ type.wf n ty
-    end.
-
-  Fixpoint tyshift (c d : nat) (e : t) : t :=
-    match e with
-    | var x => var x
-    | abs e' ty => abs (tyshift c d e') (type.shift c d ty)
-    | app e1 e2 => app (tyshift c d e1) (tyshift c d e2)
-    | tyabs e' => tyabs (tyshift (S c) d e')
-    | tyapp e' ty => tyapp (tyshift c d e') (type.shift c d ty)
-    end.
-
-  Fixpoint tysubst (D : list type.t) (e : t) : t :=
-    match e with
-    | var x => var x
-    | abs e' ty => abs (tysubst D e') (type.subst D ty)
-    | app e1 e2 => app (tysubst D e1) (tysubst D e2)
-    | tyabs e' => tyabs (tysubst (type.var 0 :: List.map (type.shift 0 1) D) e')
-    | tyapp e' ty => tyapp (tysubst D e') (type.subst D ty)
-    end.
 
   Fixpoint wf (n : nat) (e : t) :=
     match e with
     | var x => x < n
-    | abs e' ty => wf (S n) e'
+    | abs e' => wf (S n) e'
     | app e1 e2 => wf n e1 /\ wf n e2
     | tyabs e' => wf n e'
-    | tyapp e' ty => wf n e'
+    | tyapp e' => wf n e'
     end.
 
   Fixpoint shift (c d : nat) (e : t) : t :=
     match e with
     | var x => var (if x <? c then x else d + x)
-    | abs e' ty => abs (shift (S c) d e') ty
+    | abs e' => abs (shift (S c) d e')
     | app e1 e2 => app (shift c d e1) (shift c d e2)
     | tyabs e' => tyabs (shift c d e')
-    | tyapp e' ty => tyapp (shift c d e') ty
+    | tyapp e' => tyapp (shift c d e')
     end.
 
   Fixpoint subst (rho : list expr.t) (e : t) : t :=
@@ -299,10 +303,10 @@ Module expr.
               | Some e' => e'
               | None => e
               end
-    | abs e' ty => abs (subst (var 0 :: List.map (shift 0 1) rho) e') ty
+    | abs e' => abs (subst (var 0 :: List.map (shift 0 1) rho) e')
     | app e1 e2 => app (subst rho e1) (subst rho e2)
-    | tyabs e' => tyabs (subst (List.map (tyshift 0 1) rho) e')
-    | tyapp e' ty => tyapp (subst rho e') ty
+    | tyabs e' => tyabs (subst rho e')
+    | tyapp e' => tyapp (subst rho e')
     end.
 
   Fixpoint identity_subst (n : nat) : list expr.t :=
@@ -331,21 +335,6 @@ Module expr.
     - auto.
   Qed.
 
-  Lemma wf_tyshift_iff :
-    forall e n c d,
-      wf n e <-> wf n (tyshift c d e).
-  Proof.
-    induction e; simpl; intros n c d; firstorder.
-  Qed.
-
-  Lemma wf_tyshift :
-    forall e n c d,
-      wf n e -> wf n (tyshift c d e).
-  Proof.
-    intros.
-    now apply wf_tyshift_iff.
-  Qed.
-
   Lemma wf_subst :
     forall e n rho,
       wf (length rho) e ->
@@ -366,31 +355,8 @@ Module expr.
           intros.
           now apply wf_shift with (d := 1).
     - intuition eauto.
-    - apply IHe.
-      + simpl. now rewrite map_length.
-      + rewrite Forall_map.
-        eapply Forall_impl; [|eauto].
-        eauto using wf_tyshift.
+    - apply IHe; auto.
     - auto.
-  Qed.
-
-  Lemma tywf_tysubst :
-    forall e n D,
-      tywf (length D) e ->
-      Forall (type.wf n) D ->
-      tywf n (tysubst D e).
-  Proof.
-    induction e; simpl; intros n D WF F; intuition.
-    - apply type.wf_subst; auto.
-    - apply IHe.
-      + simpl. now rewrite map_length.
-      + constructor.
-        * simpl. omega.
-        * rewrite Forall_map.
-          eapply Forall_impl; [|eauto].
-          intros ty' TWF.
-          now apply type.wf_shift with (d := 1).
-    - apply type.wf_subst; auto.
   Qed.
 
   Lemma shift_shift :
@@ -409,14 +375,6 @@ Module expr.
     - f_equal; eauto.
     - f_equal. eauto.
     - f_equal. eauto.
-  Qed.
-
-  Lemma shift_tyshift :
-    forall e c1 d1 c2 d2,
-      shift c2 d2 (tyshift c1 d1 e) =
-      tyshift c1 d1 (shift c2 d2 e).
-  Proof.
-    induction e; simpl; intros c1 d1 c2 d2; f_equal; auto.
   Qed.
 
   Lemma shift_subst :
@@ -443,12 +401,7 @@ Module expr.
       f_equal. omega.
     - simpl in *. f_equal; intuition.
     - simpl in *. f_equal.
-      rewrite IHe by (simpl; rewrite map_length; assumption).
-      f_equal.
-      rewrite !map_map.
-      apply map_ext.
-      intros e'.
-      apply shift_tyshift.
+      now rewrite IHe by assumption.
     - simpl in *. f_equal.
       auto.
   Qed.
@@ -459,7 +412,7 @@ Module expr.
       subst (r1 ++ r2 ++ r3) (shift (List.length r1) (List.length r2) e) =
       subst (r1 ++ r3) e.
   Proof.
-    induction e; simpl; intros r1 r2 r3 WF.
+    induction e; simpl; intros r1 r2 r3 WF; f_equal; intuition.
     - destruct (Nat.ltb_spec x (length r1)).
       + now rewrite !nth_error_app1 by assumption.
       + rewrite !nth_error_app2 by omega.
@@ -472,52 +425,12 @@ Module expr.
         pose proof nth_error_Some r3 (x - length r1).
         rewrite !app_length in *.
         intuition.
-    - f_equal.
-      rewrite !map_app.
+    - rewrite !map_app.
       rewrite !app_comm_cons.
       erewrite <- IHe.
       + f_equal. simpl.
         now rewrite !map_length.
       + simpl. now rewrite app_length, !map_length in *.
-    - f_equal; intuition.
-    - f_equal.
-      rewrite !map_app.
-      erewrite <- IHe.
-      + f_equal. now rewrite !map_length.
-      + now rewrite app_length, !map_length in *.
-    - f_equal; auto.
-  Qed.
-
-  Lemma tyshift_tyshift :
-    forall e c1 d1 c2 d2,
-      c2 <= c1 ->
-      tyshift c2 d2 (tyshift c1 d1 e) =
-      tyshift (c1 + d2) d1 (tyshift c2 d2 e).
-  Proof.
-    induction e; simpl; intros c1 d1 c2 d2 LE; f_equal; auto using type.shift_shift.
-    now rewrite IHe by omega.
-  Qed.
-
-  Lemma tyshift_subst :
-    forall e c d rho,
-      tyshift c d (subst rho e) =
-      subst (map (tyshift c d) rho) (tyshift c d e).
-  Proof.
-    induction e; simpl; intros c d rho; f_equal; auto.
-    - rewrite nth_error_map.
-      break_match; auto.
-    - rewrite IHe.
-      simpl. f_equal. f_equal.
-      rewrite !map_map.
-      apply map_ext.
-      now auto using shift_tyshift.
-    - rewrite IHe.
-      f_equal.
-      rewrite !map_map.
-      apply map_ext.
-      intros e'.
-      rewrite tyshift_tyshift with (c2 := 0) by omega.
-      f_equal. omega.
   Qed.
 
   Lemma subst_subst :
@@ -552,48 +465,8 @@ Module expr.
           intros e' WF'.
           now apply wf_shift with (d := 1).
     - f_equal; intuition.
-    - f_equal. rewrite IHe.
-      + rewrite !map_map. f_equal.
-        apply map_ext_in.
-        intros e' I.
-        now rewrite tyshift_subst.
-      + now rewrite map_length.
-      + rewrite map_length, Forall_map.
-        eapply Forall_impl; [|now eauto].
-        now auto using wf_tyshift.
     - f_equal; auto.
-  Qed.
-
-  Lemma tysubst_tysubst :
-    forall e D1 D2,
-      tywf (length D1) e ->
-      Forall (type.wf (length D2)) D1 ->
-      tysubst D2 (tysubst D1 e) =
-      tysubst (List.map (type.subst D2 ) D1) e.
-  Proof.
-    induction e; simpl; intros D1 D2 WF F; simpl; f_equal;
-      intuition auto using type.subst_subst.
-    rewrite IHe.
-    + f_equal. simpl.
-      f_equal.
-      rewrite !map_map.
-      apply map_ext_in.
-      intros ty I.
-      assert (type.wf (length D2) ty) as WFty by (eapply Forall_forall; eauto).
-      rewrite type.shift_subst.
-      * pose proof type.subst_shift ty [] [type.var 0].
-        simpl in H.
-        rewrite H; auto.
-        now rewrite map_length.
-      * auto.
-    + simpl. now rewrite map_length.
-    + simpl. rewrite map_length.
-      constructor.
-      * simpl. omega.
-      * rewrite Forall_map.
-        eapply Forall_impl; [|now eauto].
-        intros e' WF'.
-        now apply type.wf_shift with (c := 0) (d := 1).
+    - f_equal; auto.
   Qed.
 
   Lemma nth_error_identity_subst :
@@ -608,21 +481,6 @@ Module expr.
     subst. simpl in *. congruence.
   Qed.
 
-  Lemma tyshift_identity_subst :
-    forall n c d,
-      map (tyshift c d) (identity_subst n) = identity_subst n.
-  Proof.
-    induction n; simpl; intuition.
-    f_equal.
-    rewrite !map_map.
-    erewrite map_ext.
-    erewrite <- map_map.
-    f_equal.
-    apply IHn with (c := c) (d := d).
-    intros e'. simpl.
-    auto using shift_tyshift.
-  Qed.
-
   Lemma subst_identity :
     forall e n,
       subst (identity_subst n) e = e.
@@ -633,8 +491,7 @@ Module expr.
     - f_equal.
       now apply IHe with (n := (S n)).
     - now f_equal; auto.
-    - f_equal.
-      now rewrite tyshift_identity_subst.
+    - f_equal. auto.
     - f_equal. auto.
   Qed.
 
@@ -646,53 +503,6 @@ Module expr.
     exact (subst_identity e 0).
   Qed.
 
-  Lemma tywf_shift :
-    forall e n c d,
-      tywf n e ->
-      tywf n (shift c d e).
-  Proof.
-    induction e; simpl; intros n c d TWF; intuition.
-  Qed.
-
-  Lemma tywf_tyshift :
-    forall e n c d,
-      tywf n e ->
-      tywf (d + n) (tyshift c d e).
-  Proof.
-    induction e; simpl; intros n c d TWF; intuition; auto using type.wf_shift.
-    rewrite plus_n_Sm.
-    now auto.
-  Qed.
-
-  Lemma tywf_subst :
-    forall e n rho,
-      tywf n e ->
-      Forall (tywf n) rho ->
-      tywf n (subst rho e).
-  Proof.
-    induction e; simpl; intros n rho TWF F; intuition.
-    - break_match; [|now auto].
-      now eapply Forall_nth; eauto.
-    - apply IHe; [assumption|].
-      constructor; [now auto|].
-      rewrite Forall_map.
-      eapply Forall_impl; eauto.
-      auto using tywf_shift.
-    - apply IHe; auto.
-      rewrite Forall_map.
-      eapply Forall_impl; eauto.
-      intros.
-      now apply tywf_tyshift with (d := 1).
-  Qed.
-
-  Lemma tywf_weaken :
-    forall e n d,
-      n <= d ->
-      tywf n e ->
-      tywf d e.
-  Proof.
-    induction e; simpl; intros n d LT TWF; intuition; eauto using type.wf_weaken with arith.
-  Qed.
 
   Lemma subst_shift' :
     forall e e' g,
@@ -713,102 +523,6 @@ Module expr.
     rewrite subst_shift' by auto.
     now rewrite subst_identity with (n := 0).
   Qed.
-
-  Lemma tysubst_shift :
-    forall e D c d,
-      expr.tysubst D (expr.shift c d e) =
-      expr.shift c d (expr.tysubst D e).
-  Proof.
-    induction e; simpl; intros D c d; f_equal; auto.
-  Qed.
-
-  Lemma tyshift_tysubst :
-    forall e c d D,
-      expr.tywf (length D) e ->
-      expr.tyshift c d (expr.tysubst D e) =
-      expr.tysubst (map (type.shift c d) D) e.
-  Proof.
-    induction e; simpl; intros c d D TWF; f_equal; intuition; auto using type.shift_subst.
-    rewrite IHe.
-    - simpl. f_equal. f_equal.
-      rewrite !map_map.
-      apply map_ext.
-      intros ty.
-      rewrite type.shift_shift with (c2 := 0) (d2 := 1) by omega.
-      f_equal. omega.
-    - simpl. now rewrite map_length.
-  Qed.
-
-  Lemma tysubst_tyshift :
-    forall e D1 D2 D3,
-      expr.tywf (List.length (D1 ++ D3)) e ->
-      expr.tysubst (D1 ++ D2 ++ D3) (expr.tyshift (List.length D1) (List.length D2) e) =
-      expr.tysubst (D1 ++ D3) e.
-  Proof.
-    induction e; simpl; intros D1 D2 D3 TWF; f_equal; intuition; auto using type.subst_shift.
-    - rewrite !map_app.
-      rewrite !app_comm_cons.
-      erewrite <- IHe.
-      + f_equal. simpl. now rewrite !map_length.
-      + simpl. now rewrite app_length, !map_length in *.
-  Qed.
-
-  Lemma tysubst_subst :
-    forall e D rho,
-      expr.tywf (length D) e ->
-      Forall (expr.tywf (length D)) rho ->
-      expr.tysubst D (expr.subst rho e) =
-      expr.subst (map (expr.tysubst D) rho) (expr.tysubst D e).
-  Proof.
-    induction e; simpl; intros D rho WF F; f_equal; intuition.
-    - rewrite nth_error_map.
-      break_match; auto.
-    - rewrite IHe.
-      * f_equal.
-        simpl.
-        f_equal.
-        rewrite !map_map.
-        apply map_ext.
-        now auto using tysubst_shift.
-      * assumption.
-      * constructor; [now auto|].
-        rewrite Forall_map.
-        eapply Forall_impl; [|now eauto].
-        intros e' TWF.
-        now apply expr.tywf_shift.
-    - f_equal.
-      rewrite IHe.
-      + f_equal.
-        rewrite !map_map.
-        apply map_ext_in.
-        intros e' I.
-        assert (expr.tywf (length D) e').
-        { destruct (In_nth_error _ _ I) as [n NE].
-          eapply Forall_nth; eauto. }
-        rewrite tyshift_tysubst by assumption.
-        pose proof tysubst_tyshift e' [] [type.var 0] (map (type.shift 0 1) D) as TS.
-        simpl in TS.
-        rewrite map_length in TS.
-        specialize (TS H).
-        now rewrite TS.
-      + simpl. now rewrite map_length.
-      + simpl. rewrite map_length.
-        rewrite Forall_map.
-        eapply Forall_impl; [|now eauto].
-        intros e' TWF'.
-        now apply expr.tywf_tyshift with (c := 0) (d := 1).
-  Qed.
-
-  Lemma tyshift_nop :
-    forall e c d n,
-      n <= c ->
-      tywf n e ->
-      tyshift c d e = e.
-  Proof.
-    induction e; simpl; intros c d n LE WF; f_equal; intuition eauto using type.shift_nop.
-    eapply IHe; [|eauto].
-    omega.
-  Qed.
 End expr.
 
 Module has_type.
@@ -820,7 +534,7 @@ Module has_type.
   | abs : forall n G ty1 ty2 e
       (WFty1 : type.wf n ty1),
       t n (ty1 :: G) e ty2 ->
-      t n G (expr.abs e ty1) (type.arrow ty1 ty2)
+      t n G (expr.abs e) (type.arrow ty1 ty2)
   | app : forall n G ty1 ty2 e1 e2,
       t n G e1 (type.arrow ty1 ty2) -> 
       t n G e2 ty1 ->
@@ -832,7 +546,7 @@ Module has_type.
   | tyapp : forall n G e ty_body ty,
       type.wf n ty ->
       t n G e (type.all ty_body) ->
-      t n G (expr.tyapp e ty) (type.subst (ty :: type.identity_subst n) ty_body)
+      t n G (expr.tyapp e) (type.subst (ty :: type.identity_subst n) ty_body)
   .
 
   Lemma t_type_wf :
@@ -869,19 +583,11 @@ Module has_type.
     - apply nth_error_Some. congruence.
     - now rewrite map_length in *.
   Qed.
-
-  Lemma t_expr_tywf :
-    forall n G e ty,
-      t n G e ty ->
-      expr.tywf n e.
-  Proof.
-    induction 1; simpl in *; intuition.
-  Qed.
 End has_type.
 
 Module value.
   Inductive t : expr.t -> Prop :=
-  | abs : forall e ty, t (expr.abs e ty)
+  | abs : forall e, t (expr.abs e)
   | tyabs : forall e, t (expr.tyabs e)
   .
 End value.
@@ -895,17 +601,17 @@ Module step.
       value.t e1 ->
       t e2 e2' ->
       t (expr.app e1 e2) (expr.app e1 e2')
-  | beta : forall body ty v,
+  | beta : forall body v,
       value.t v ->
-      t (expr.app (expr.abs body ty) v) (expr.subst [v] body)
-  | tyapp : forall e e' ty,
+      t (expr.app (expr.abs body) v) (expr.subst [v] body)
+  | tyapp : forall e e' ,
       t e e' ->
-      t (expr.tyapp e ty) (expr.tyapp e' ty)
-  | tybeta : forall body ty,
-      t (expr.tyapp (expr.tyabs body) ty)
-        (expr.tysubst [ty] body)
+      t (expr.tyapp e) (expr.tyapp e')
+  | tybeta : forall body,
+      t (expr.tyapp (expr.tyabs body))
+        body
   .
-    Hint Constructors t.
+  Hint Constructors t.
 
   Definition star : expr.t -> expr.t -> Prop := clos_refl_trans_n1 _ t.
 
@@ -947,6 +653,17 @@ Module step.
     - econstructor; [|apply IHStar]; eauto.
   Qed.
 
+  Lemma star_tyapp :
+    forall e e',
+      star e e' ->
+      star (expr.tyapp e) (expr.tyapp e').
+  Proof.
+    intros e e' Star.
+    induction Star.
+    - constructor.
+    - econstructor; [|apply IHStar]; eauto.
+  Qed.
+
   Lemma star_trans :
     forall e1 e2 e3,
       star e1 e2 ->
@@ -976,7 +693,7 @@ Module semtype.
   Definition wf (S : t) :=
     forall e,
       S e ->
-      value.t e /\ expr.wf 0 e /\ expr.tywf 0 e.
+      value.t e /\ expr.wf 0 e.
 End semtype.
 
 Fixpoint V ty (d : list semtype.t) e :=
@@ -988,8 +705,8 @@ Fixpoint V ty (d : list semtype.t) e :=
       end
     | type.arrow ty1 ty2 =>
       expr.wf 0 e /\
-      exists body ty,
-          e = expr.abs body ty /\
+      exists body,
+          e = expr.abs body /\
           forall e2,
             V ty1 d e2 ->
             terminating.t (V ty2 d) (expr.subst [e2] body)
@@ -1016,7 +733,7 @@ Proof.
   - break_match; intuition.
     assert (semtype.wf t) by (eapply Forall_nth; eauto).
     firstorder.
-  - destruct HV as [WF [body [ty [E H]]]].
+  - destruct HV as [WF [body [E H]]].
     subst. constructor.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
@@ -1093,73 +810,6 @@ Proof.
     omega.
 Qed.
 
-Lemma tyshift_tywf_inv :
-  forall e n c d,
-    expr.tywf n (expr.tyshift c d e) ->
-    expr.tywf (max (min n c) (n - d)) e.
-Proof.
-  induction e; simpl; intros n c d WF; intuition; eauto.
-  - auto using type_shift_wf_inv.
-  - eapply expr.tywf_weaken; [|eauto].
-    pose proof Nat.max_spec (min (S n) (S c)) (S n - d).
-    pose proof Nat.max_spec (min n c) (n - d).
-    pose proof Nat.min_spec (S n) (S c).
-    pose proof Nat.min_spec n c.
-    omega.
-  - auto using type_shift_wf_inv.
-Qed.
-
-Lemma tyshift_tywf_inv' :
-  forall e c d,
-    expr.tywf 0 (expr.tyshift c d e) ->
-    expr.tywf 0 e.
-Proof.
-  intros.
-  now apply (tyshift_tywf_inv e 0 c d).
-Qed.
-
-Lemma V_tyshift :
-  forall ty D c d v,
-    Forall semtype.wf D ->
-    V ty D v <-> V ty D (expr.tyshift c d v).
-Proof.
-  induction ty; intros D c d v F.
-  - simpl. break_match; [|now intuition].
-    assert (semtype.wf t) as T by (eapply Forall_nth; eauto).
-    unfold semtype.wf in T.
-    split; intros TV.
-    + destruct (T _ TV) as [Valv [WF TWF]].
-      erewrite expr.tyshift_nop; [assumption| | exact TWF]; omega.
-    + destruct (T _ TV) as [Valv [WF TWF]].
-      eapply tyshift_tywf_inv' in TWF.
-      now rewrite expr.tyshift_nop with (n := 0) in * by auto with *.
-  - cbn [V].
-    rewrite <- expr.wf_tyshift_iff.
-    split; intros [WF [body [ty [? Vbody]]]]; subst; (split; [assumption|]);
-      cbn [expr.tyshift].
-    + do 2 eexists; split; [reflexivity|].
-      admit.
-    + destruct v; simpl in H; try discriminate.
-      inversion H; subst. clear H.
-      do 2 eexists; split; [reflexivity|].
-      intros v2 V2.
-      apply Vbody in V2.
-      destruct V2 as [v2' [Star2' [Val2' V2']]].
-      pose proof expr.tyshift_subst v c d [v2] as SS.
-      cbn[map] in SS.
-
-
-Lemma subst_tyshift :
-  forall e rho c d,
-    expr.subst rho (expr.tyshift c d
-
-
-
-
-
-
-
-
 Lemma V_shift :
   forall ty d1 d2 d3 v,
     Forall semtype.wf (d1 ++ d3) ->
@@ -1175,27 +825,26 @@ Proof.
          with (alpha - length d1) by omega.
       now auto.
   - intros Vv.
-    destruct Vv as [WFe [body [ty1' [? Ebody]]]].
-    split.
-    + auto using expr.wf_tyshift.
-    + subst v.
-      do 2 eexists.
-      split; [reflexivity|].
-      intros v2 V2.
-      assert (E ty2 (d1 ++ d3) (expr.subst [v2] body)) as Ev2.
-      { apply Ebody.
-        eapply IHty1; [assumption|].
-        eauto.
-      }
-      destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
-      eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
-      exists v2'; intuition.
+    destruct Vv as [WFe [body [? Ebody]]].
+    split; auto.
+    subst v.
+    eexists.
+    split; [reflexivity|].
+    intros v2 V2.
+    assert (E ty2 (d1 ++ d3) (expr.subst [v2] body)) as Ev2.
+    { apply Ebody.
+      eapply IHty1; [assumption|].
+      eauto.
+    }
+    destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
+    eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
+    exists v2'; intuition.
   - simpl.
     intros Vv.
-    destruct Vv as [WF [body [ty [? Hv]]]].
+    destruct Vv as [WF [body [? Hv]]].
     intuition.
     subst v.
-    do 2 eexists.
+    eexists.
     split; [reflexivity|].
     intros v2 V2.
     assert (E (type.shift (length d1) (length d2) ty2) (d1 ++ d2 ++ d3) (expr.subst [v2] body))
@@ -1225,16 +874,192 @@ Qed.
 Lemma V_shift' :
   forall ty S d v,
     Forall semtype.wf d ->
-    V ty d v ->
-    V (type.shift 0 1 ty) (S :: d) (expr.tyshift 0 1 v).
+    V ty d v <-> V (type.shift 0 1 ty) (S :: d) v.
 Proof.
   intros.
   apply V_shift with (d1 := []) (d2 := [S]) (d3 := d); auto.
-  apply V_tyshift; auto.
 Qed.
+
+Lemma terminating_iff :
+  forall (P Q : expr.t -> Prop),
+    (forall e, P e <-> Q e) ->
+    (forall e, terminating.t P e <-> terminating.t Q e).
+Proof.
+  firstorder.
+Qed.
+
+Lemma V_map_identity :
+  forall d2 d1,
+    Forall2 (fun P Q => forall e, P e <-> Q e)
+            (map (fun ty0 => V ty0 (d1 ++ d2)) (map (type.shift 0 (length d1)) (type.identity_subst (length d2))))
+            d2.
+Proof.
+  induction d2; intros d1; simpl; constructor.
+  - intros e.
+    rewrite nth_error_app2 by omega.
+    replace (length d1 + 0 - length d1)
+       with 0 by omega.
+    reflexivity.
+  - rewrite map_map with (g := type.shift _ _).
+    rewrite map_ext
+       with (f := (fun x => type.shift 0 (length d1) (type.shift 0 1 x)))
+            (g := (fun x => type.shift 0 (S (length d1)) x))
+         by (intros; rewrite type.shift_merge; f_equal; omega).
+    specialize (IHd2 (d1 ++ [a])).
+    rewrite app_length in IHd2.
+    cbn [length] in IHd2.
+    rewrite <- plus_n_Sm in IHd2.
+    rewrite <- plus_n_O in IHd2.
+    rewrite map_ext
+       with (f := (fun ty0 => V ty0 ((d1 ++ [a]) ++ d2)))
+            (g := (fun ty0 => V ty0 (d1 ++ a :: d2)))
+         in IHd2
+         by (now intros; rewrite app_ass).
+    auto.
+Qed.
+
+Lemma V_map_identity' :
+  forall d,
+    Forall2 (fun P Q => forall e, P e <-> Q e)
+            (map (fun ty0 => V ty0 d) (type.identity_subst (length d)))
+            d.
+Proof.
+  intros.
+  pose proof V_map_identity d [].
+  simpl in H.
+  rewrite map_ext with (f := type.shift _ _) (g := fun x => x) in H by auto using type.shift_nop_d.
+  now rewrite map_id in H.
+Qed.
+
+Lemma V_semtype :
+  forall ty d,
+    Forall semtype.wf d ->
+    semtype.wf (V ty d).
+Proof.
+  intros.
+  split.
+  - eauto using V_value.
+  - eauto using V_wf.
+Qed.
+
+Lemma V_ext :
+  forall ty d1 d2,
+    Forall2 (fun P Q => forall e, P e <-> Q e) d1 d2 ->
+    forall e,
+      V ty d1 e <-> V ty d2 e.
+Proof.
+  induction ty; simpl; intros d1 d2 F e.
+  - break_match.
+    + destruct (Forall2_nth_error_r F Heqo) as [t' [NE' H]].
+      unfold semtype.t.
+      now rewrite NE'.
+    + pose proof Forall2_length F.
+      pose proof nth_error_None d1 alpha.
+      pose proof nth_error_None d2 alpha.
+      assert (nth_error d2 alpha = None) by intuition.
+      unfold semtype.t. rewrite H2.
+      intuition.
+  - specialize (IHty1 d1 d2 F).
+    specialize (IHty2 d1 d2 F).
+    split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
+      intros e2 V2.
+    + rewrite <- terminating_iff.
+      apply H.
+      firstorder.
+      assumption.
+    + rewrite terminating_iff.
+      apply H.
+      firstorder.
+      assumption.
+  - split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
+      intros S SWF; specialize (IHty (S :: d1) (S :: d2)).
+    + rewrite <- terminating_iff.
+      apply H.
+      apply SWF.
+      apply IHty.
+      constructor; intuition.
+    + rewrite terminating_iff.
+      apply H.
+      apply SWF.
+      apply IHty.
+      constructor; intuition.
+Qed.
+
+Lemma V_subst :
+  forall ty D d,
+    type.wf (length D) ty ->
+    Forall (type.wf (length d)) D ->
+    Forall semtype.wf d ->
+    (forall e, V (type.subst D ty) d e <-> V ty (map (fun ty0 => V ty0 d) D) e).
+Proof.
+  induction ty; simpl; intros D d WFty F e.
+  - rewrite nth_error_map.
+    break_match; [now intuition|].
+    pose proof nth_error_None D alpha.
+    now firstorder.
+  - unfold terminating.t.
+    setoid_rewrite IHty1; try solve [intuition].
+    setoid_rewrite IHty2; try solve [intuition].
+  - unfold terminating.t.
+    split; intros [WF [body [? Ebody]]]; (split;[assumption|]);
+      subst; exists body; (split; [reflexivity|]);
+        intros S SWF; specialize (Ebody S SWF);
+          destruct Ebody as [v [Star [Val Vv]]]; exists v; intuition.
+    + rewrite IHty in Vv.
+      * simpl in Vv. rewrite map_map in Vv.
+        eapply V_ext; [|apply Vv].
+        constructor; [now intuition|].
+        apply Forall2_map.
+        apply Forall2_forall_suff_weak; auto.
+        intros.
+        assert (y = z) by congruence.
+        subst.
+        apply V_shift'; auto.
+      * simpl. rewrite map_length. auto.
+      * simpl. constructor; [simpl; omega|].
+        rewrite Forall_map.
+        apply Forall_from_nth.
+        intros.
+        apply type.wf_shift with (d := 1).
+        eapply Forall_nth; eauto.
+      * constructor; auto.
+    + rewrite IHty.
+      * simpl. rewrite map_map.
+        eapply V_ext; [|apply Vv].
+        constructor; [now intuition|].
+        apply Forall2_map.
+        apply Forall2_forall_suff_weak; auto.
+        intros.
+        assert (y = z) by congruence.
+        subst.
+        rewrite <- V_shift'; intuition.
+      * simpl. rewrite map_length. auto.
+      * simpl. constructor; [simpl; omega|].
+        rewrite Forall_map.
+        apply Forall_from_nth.
+        intros.
+        apply type.wf_shift with (d := 1).
+        eapply Forall_nth; eauto.
+      * constructor; auto.
+Qed.
+
+
+Lemma E_subst :
+  forall ty D d,
+    type.wf (length D) ty ->
+    Forall (type.wf (length d)) D ->
+    Forall semtype.wf d ->
+    (forall e, E (type.subst D ty) d e <-> E ty (map (fun ty0 => V ty0 d) D) e).
+Proof.
+  intros ty D d TWF F SWF.
+  apply terminating_iff.
+  apply V_subst; auto.
+Qed.
+
 
 Theorem fundamental :
   forall n G e ty,
+    Forall (type.wf n) G ->
     has_type.t n G e ty ->
     forall d g,
       length d = n ->
@@ -1242,7 +1067,8 @@ Theorem fundamental :
       Forall2 (fun ty e => V ty d e) G g ->
       E ty d (expr.subst g e).
 Proof.
-  induction 1; intros d g ? WFd WFg; subst n.
+  intros n G e ty GWF HT.
+  induction HT; intros d g ? WFd WFg; subst n.
   - simpl. apply V_E; auto.
     destruct (Forall2_nth_error_r WFg H) as [v [Hv HV]].
     now rewrite Hv.
@@ -1251,7 +1077,7 @@ Proof.
     split.
     + cbn [expr.wf].
       apply expr.wf_subst.
-      * apply has_type.t_expr_wf in H.
+      * apply has_type.t_expr_wf in HT.
         cbn [length] in *.
         rewrite map_length.
         now erewrite <- Forall2_length by eauto.
@@ -1274,10 +1100,10 @@ Proof.
         apply expr.tywf_shift.
         eapply V_tywf; eauto.
 *)
-    + do 2 eexists. split; [reflexivity|].
+    + eexists. split; [reflexivity|].
       intros v2 V2.
       rewrite expr.subst_subst.
-      * apply IHt; auto.
+      * apply IHHT; auto.
         simpl. rewrite map_map.
         constructor; [assumption|].
         erewrite map_ext_in.
@@ -1290,7 +1116,7 @@ Proof.
         destruct (Forall2_nth_error_l WFg NE) as [ty' [NE' V']].
         eapply V_wf; eauto.
       * simpl. rewrite map_length.
-        apply has_type.t_expr_wf in H.
+        apply has_type.t_expr_wf in HT.
         erewrite <- Forall2_length by eauto.
         assumption.
       * simpl. constructor; [simpl; omega|].
@@ -1301,11 +1127,11 @@ Proof.
         destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vxy]].
         eauto using V_wf.
   - cbn [expr.subst].
-    specialize (IHt1 d g eq_refl WFd WFg).
-    specialize (IHt2 d g eq_refl WFd WFg).
-    destruct IHt1 as [v1 [S1 [Val1 V1]]].
-    destruct IHt2 as [v2 [S2 [Val2 V2]]].
-    destruct V1 as [WF1 [body [ty [? H1]]]].
+    specialize (IHHT1 GWF d g eq_refl WFd WFg).
+    specialize (IHHT2 GWF d g eq_refl WFd WFg).
+    destruct IHHT1 as [v1 [S1 [Val1 V1]]].
+    destruct IHHT2 as [v2 [S2 [Val2 V2]]].
+    destruct V1 as [WF1 [body [? H1]]].
     subst v1.
     apply E_star with (e' := expr.subst [v2] body); [|now eauto].
     eapply step.star_trans.
@@ -1320,14 +1146,12 @@ Proof.
     cbn [expr.subst V].
     split.
     + cbn [expr.wf]. apply expr.wf_subst.
-      * eapply has_type.t_expr_wf in H.
+      * eapply has_type.t_expr_wf in HT.
         rewrite map_length in *.
         now erewrite <- Forall2_length by eauto.
-      * rewrite Forall_map.
-        apply Forall_from_nth.
+      * apply Forall_from_nth.
         intros n x NEx.
         destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vy]].
-        apply expr.wf_tyshift.
         eapply V_wf; eauto.
 (*
     + cbn [expr.tywf].
@@ -1342,14 +1166,41 @@ Proof.
 *)
     + eexists. split; [reflexivity|].
       intros S SWF.
-      apply IHt.
+      apply IHHT.
+      * rewrite Forall_map. eapply Forall_impl; [| apply GWF].
+        intros ty' WF'.
+        now apply type.wf_shift with (c := 0) (d := 1).
       * auto.
       * constructor; auto.
-      * rewrite Forall2_map.
+      * apply Forall2_map_l.
         eapply Forall2_impl; [|now eauto].
         simpl.
         intros ty' e' V'.
         now apply V_shift'; auto.
-  -
+  - specialize (IHHT GWF d g eq_refl WFd WFg).
+    destruct IHHT as [v [S [Val Vv]]].
+    destruct Vv as [WFv [body [? Ebody]]].
+    cbn [expr.subst].
+    subst v.
+    eapply E_star.
+    eapply step.star_trans.
+    eapply step.star_tyapp.
+    eauto.
+    eapply step.step_l.
+    apply step.tybeta.
+    constructor.
+    apply E_subst.
+    + simpl. rewrite type.identity_subst_length.
+      apply has_type.t_type_wf in HT; auto.
+    + constructor; auto.
+      apply type.identity_subst_wf.
+    + auto.
+    + simpl.
+      eapply terminating_iff; [| apply Ebody with (S := V ty d); auto using V_semtype].
+      intros e'.
+      apply V_ext.
+      constructor; [now intuition|].
+      apply V_map_identity'.
+Qed.
 
-Admitted.
+Print Assumptions fundamental.
