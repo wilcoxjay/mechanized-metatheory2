@@ -1,24 +1,5 @@
 Require Import util abt.
 
-Module tyop.
-  Inductive t' :=
-  | unit
-  | arrow
-  .
-  Definition t := t'.
-
-  Definition arity (op : t) : arity.t :=
-    match op with
-    | unit => []
-    | arrow => [0; 0]
-    end.
-
-  Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
-    decide equality.
-  Defined.
-
-End tyop.
-
 Module exprop.
   Inductive t' :=
   | abs
@@ -40,9 +21,10 @@ Module exprop.
 End exprop.
 
 Module type.
-   Include abt.abt tyop.
-   Notation unit := (op tyop.unit []).
-   Notation arrow ty1 ty2 := (op tyop.arrow [bind 0 ty1; bind 0 ty2]).
+  Inductive t :=
+  | unit
+  | arrow : t -> t -> t
+  .
 End type.
 
 Module expr.
@@ -233,7 +215,7 @@ Fixpoint V ty e :=
     | type.arrow ty1 ty2 =>
       expr.wf 0 e /\
       exists body,
-          e = expr.abs body ty1 /\
+          e = expr.abs body /\
           forall e2,
             V ty1 e2 ->
             terminating.t (V ty2) (expr.subst [e2] body)
@@ -340,12 +322,12 @@ Proof.
     apply V_E.
     cbn [V].
     split.
-    + simpl. apply expr.wf_subst.
+    + simpl. split; [|exact I]. apply expr.wf_subst.
       * simpl. rewrite map_length.
         apply has_type_wf in H.
         simpl in *.
         now erewrite Forall2_length in * by eauto.
-      * eauto using V_list_closed.
+      * eapply V_list_closed; eauto.
     + eexists. split. reflexivity.
       intros e2 Ve2.
       cbn [expr.subst].
@@ -361,7 +343,7 @@ Proof.
         rewrite map_map.
         erewrite map_ext_in; [now rewrite map_id|].
         intros e' I. simpl.
-        rewrite expr.subst_shift with (r1 := []) (r2 := [e2]) (r3 := []).
+        rewrite expr.subst_shift with (rho1 := []) (rho2 := [e2]) (rho3 := []).
         -- now rewrite expr.subst_identity with (n := 0).
         -- simpl.
            destruct (In_nth_error _ _ I) as [n NE].
@@ -370,7 +352,7 @@ Proof.
       * simpl. rewrite map_length.
         eapply has_type_wf in H. simpl in *.
         now erewrite <- Forall2_length by eauto.
-      * eauto using V_list_closed.
+      * eapply V_list_closed; eauto.
   - simpl.
     specialize (IHt1 vs F).
     specialize (IHt2 vs F).
@@ -379,6 +361,7 @@ Proof.
     destruct V1 as [WF1 [body [? H1]]].
     subst v1.
     apply E_star with (e' := expr.subst [v2] body); [|now eauto].
+    rewrite expr.descend_0.
     eapply step.star_trans.
     eapply step.star_app1; eauto.
     eapply step.star_trans.
