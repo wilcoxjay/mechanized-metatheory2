@@ -20,25 +20,25 @@ End semtype.
 
 Fixpoint V ty (d : list semtype.t) e :=
   match ty with
-    | type.var alpha =>
-      match nth_error d alpha with
-      | Some X => X e
-      | None => False
-      end
-    | type.arrow ty1 ty2 =>
-      expr.wf 0 e /\
-      exists body,
-          e = expr.abs body /\
-          forall e2,
-            V ty1 d e2 ->
-            terminating.t (V ty2 d) (expr.subst [e2] body)
-    | type.all ty' =>
-      expr.wf 0 e /\
-      exists body,
-        e = expr.tyabs body /\
-        forall (S : semtype.t),
-          semtype.wf S  ->
-          terminating.t (V ty' (S :: d)) body
+  | type.var alpha =>
+    match nth_error d alpha with
+    | Some X => X e
+    | None => False
+    end
+  | type.arrow ty1 ty2 =>
+    expr.wf 0 e /\
+    exists body,
+      e = expr.abs body /\
+      forall e2,
+        V ty1 d e2 ->
+        terminating.t (V ty2 d) (expr.subst [e2] body)
+  | type.all ty' =>
+    expr.wf 0 e /\
+    exists body,
+      e = expr.tyabs body /\
+      forall (S : semtype.t),
+        semtype.wf S  ->
+        terminating.t (V ty' (S :: d)) body
   end.
 
 Notation E ty d :=
@@ -51,10 +51,10 @@ Lemma V_value :
     value.t v.
 Proof.
   intros ty d v WFd HV.
-  destruct ty; cbn [V] in HV.
+  destruct ty; cbn in HV.
   - break_match; intuition.
     assert (semtype.wf t) by (eapply Forall_nth; eauto).
-    firstorder.
+    now firstorder.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
   - destruct HV as [WF [body [E H]]].
@@ -110,41 +110,18 @@ Proof.
   now induction Star; eauto using E_step.
 Qed.
 
-Lemma type_shift_wf_inv :
-  forall ty n c d,
-    type.wf n (type.shift c d ty) ->
-    type.wf (max (min n c) (n - d)) ty.
-Proof.
-  induction ty; simpl; intros n c d WF; intuition; eauto.
-  - destruct (Nat.ltb_spec alpha c).
-    + pose proof Nat.max_spec (min n c) (n - d).
-      pose proof Nat.min_spec n c.
-      omega.
-    + pose proof Nat.max_spec (min n c) (n - d).
-      pose proof Nat.min_spec n c.
-      omega.
-  - apply IHty in WF.
-    eapply type.wf_weaken; [|eauto].
-    pose proof Nat.max_spec (min (S n) (S c)) (S n - d).
-    pose proof Nat.max_spec (min n c) (n - d).
-    pose proof Nat.min_spec (S n) (S c).
-    pose proof Nat.min_spec n c.
-    omega.
-Qed.
-
 Lemma V_shift :
   forall ty d1 d2 d3 v,
     Forall semtype.wf (d1 ++ d3) ->
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty; intros d1 d2 d3 v F; [|split|].
+  induction ty as [alpha| |]; intros d1 d2 d3 v F; [|split|].
   - simpl.
     destruct (Nat.ltb_spec alpha (length d1)).
-    + now rewrite !nth_error_app1 by assumption.
+    + rewrite !nth_error_app1 by assumption. intuition.
     + rewrite !nth_error_app2 by omega.
-      replace (length d2 + alpha - length d1 - length d2)
-         with (alpha - length d1) by omega.
+      do_app2_minus.
       now auto.
   - intros Vv.
     destruct Vv as [WFe [body [? Ebody]]].
@@ -213,12 +190,14 @@ Qed.
 Lemma V_map_identity :
   forall d2 d1,
     Forall2 (fun P Q => forall e, P e <-> Q e)
-            (map (fun ty0 => V ty0 (d1 ++ d2)) (map (type.shift 0 (length d1)) (type.identity_subst (length d2))))
+            (map (fun ty0 => V ty0 (d1 ++ d2))
+                 (map (type.shift 0 (length d1)) (type.identity_subst (length d2))))
             d2.
 Proof.
   induction d2; intros d1; simpl; constructor.
   - intros e.
     rewrite nth_error_app2 by omega.
+    rewrite Nat.sub_diag.
     replace (length d1 + 0 - length d1)
        with 0 by omega.
     reflexivity.
@@ -314,9 +293,9 @@ Lemma V_subst :
     Forall semtype.wf d ->
     (forall e, V (type.subst D ty) d e <-> V ty (map (fun ty0 => V ty0 d) D) e).
 Proof.
-  induction ty; simpl; intros D d WFty F e.
+  induction ty; simpl; intros D d WFty F WFd e.
   - rewrite nth_error_map.
-    break_match; [now intuition|].
+    break_match; intuition.
     pose proof nth_error_None D alpha.
     now firstorder.
   - unfold terminating.t.
@@ -490,7 +469,7 @@ Proof.
     + simpl. rewrite type.identity_subst_length.
       apply has_type.t_type_wf in HT; auto.
     + constructor; auto.
-      apply type.identity_subst_wf.
+      apply type.wf_identity_subst.
     + auto.
     + simpl.
       eapply terminating_iff; [| apply Ebody with (S := V ty d); auto using V_semtype].
@@ -602,5 +581,3 @@ Proof.
   apply step.beta; auto.
   auto.
 Qed.
-
-

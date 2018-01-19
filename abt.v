@@ -22,14 +22,16 @@ Module Type OPERATOR.
   Parameter arity : t -> arity.t.
 End OPERATOR.
 
-Module abt (O : OPERATOR).
+Module Type ABT.
+  Declare Module O : OPERATOR.
+
   Local Unset Elimination Schemes.
   Inductive t : Type :=
   | var (x : nat) : t
   | op : O.t -> list binder -> t
   with
   binder :=
-  | bind (s : nat) : t -> binder.
+  | bind (v : valence.t) : t -> binder.
 
   Section rect.
     Variable P : t -> Type.
@@ -58,7 +60,144 @@ Module abt (O : OPERATOR).
       | bind s e => Pbind s (rect e)
       end
     .
+
+    Definition rect_list :=
+      fix rect_list (l : list binder) : Pbl l :=
+          match l with
+          | [] => Pblnil
+          | b :: bs => Pblcons (rect_binder b) (rect_list bs)
+          end.
   End rect.
+
+
+  Section rect'.
+    Variable P : t -> Prop.
+    Variable Pb : binder -> Prop.
+    Let Pbl (bs : list binder) : Prop := Forall Pb bs.
+
+    Hypotheses Pvar : forall n, P (var n).
+    Hypothesis Pop : forall o bs, Pbl bs -> P (op o bs).
+    Hypothesis Pbind : forall n e, P e -> Pb (bind n e).
+
+    Definition rect' (e : t) : P e.
+      refine (rect P Pb Pbl Pvar Pop Pbind (Forall_nil _) _ e).
+      intros. constructor; auto.
+    Defined.
+  End rect'.
+
+  Fixpoint ws (e : t) {struct e} :=
+    let fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
+        match a, bs with
+        | [], [] => True
+        | v :: a, b :: bs => ws_binder v b /\ go_list a bs
+        | _, _ => False
+        end
+    in
+    match e with
+    | var n => True
+    | op o bs => go_list (O.arity o) bs
+    end
+  with
+  ws_binder (v : valence.t) (b : binder) {struct b} :=
+    match b with
+    | bind v' e => v = v' /\ ws e
+    end.
+  Definition ws_binders :=
+    fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
+        match a, bs with
+        | [], [] => True
+        | v :: a, b :: bs => ws_binder v b /\ go_list a bs
+        | _, _ => False
+        end.
+
+  Fixpoint wf (n : nat) (e : t) :=
+    let fix go_list (n : nat) (bs : list binder) :=
+        match bs with
+        | [] => True
+        | b :: bs => wf_binder n b /\ go_list n bs
+        end
+    in
+    match e with
+    | var x => x < n
+    | op o bs => go_list n bs
+    end
+  with wf_binder (n : nat) (b : binder) :=
+         match b with
+         | bind s e => wf (s + n) e
+         end.
+  Definition wf_binders :=
+    fix go_list (n : nat) (bs : list binder) :=
+        match bs with
+        | [] => True
+        | b :: bs => wf_binder n b /\ go_list n bs
+        end.
+
+  Parameter subst : list t -> t -> t.
+  Parameter shift : nat -> nat -> t -> t.
+  Parameter identity_subst : nat -> list t.
+
+  Parameter ws_shift : forall e c d, ws e -> ws (shift c d e).
+  Parameter ws_subst :
+    forall e rho, ws e -> Forall ws rho -> ws (subst rho e).
+  Parameter ws_identity_subst : forall n, Forall ws (identity_subst n).
+
+  Parameter wf_shift : forall e c d n, wf n e -> wf (d + n) (shift c d e).
+  Parameter wf_subst : forall e n rho,
+      wf (length rho) e -> List.Forall (wf n) rho -> wf n (subst rho e).
+  Parameter wf_identity_subst : forall n, Forall (wf n) (identity_subst n).
+  Parameter wf_weaken : forall e n d, n <= d -> wf n e -> wf d e.
+
+  Parameter identity_subst_length : forall n, length (identity_subst n) = n.
+
+  Parameter shift_merge : forall e c d1 d2, shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+End ABT.
+
+Module internal (O : OPERATOR).
+  Module O := O.
+  Local Unset Elimination Schemes.
+  Inductive t : Type :=
+  | var (x : nat) : t
+  | op : O.t -> list binder -> t
+  with
+  binder :=
+  | bind (v : valence.t) : t -> binder.
+
+  Section rect.
+    Variable P : t -> Type.
+    Variable Pb : binder -> Type.
+    Variable Pbl : list binder -> Type.
+
+    Hypotheses Pvar : forall x, P (var x).
+    Hypothesis Pop : forall o bs, Pbl bs -> P (op o bs).
+    Hypothesis Pbind : forall s e, P e -> Pb (bind s e).
+    Hypothesis Pblnil : Pbl [].
+    Hypothesis Pblcons : forall b bs, Pb b -> Pbl bs -> Pbl (b :: bs).
+
+    Fixpoint rect (e : t) : P e :=
+      let fix rect_list (l : list binder) : Pbl l :=
+          match l with
+          | [] => Pblnil
+          | b :: bs => Pblcons (rect_binder b) (rect_list bs)
+          end
+      in
+      match e with
+      | var x => Pvar x
+      | op o bs => Pop o (rect_list bs)
+      end
+    with rect_binder (b : binder) : Pb b :=
+      match b with
+      | bind s e => Pbind s (rect e)
+      end
+    .
+
+    Definition rect_list :=
+      fix rect_list (l : list binder) : Pbl l :=
+          match l with
+          | [] => Pblnil
+          | b :: bs => Pblcons (rect_binder b) (rect_list bs)
+          end.
+  End rect.
+
 
   Section rect'.
     Variable P : t -> Prop.
@@ -358,7 +497,7 @@ Module abt (O : OPERATOR).
     repeat do_ltb; omega.
   Qed.
 
-  Local Notation SIS d n := (map (shift 0 d) (identity_subst n)).
+  Notation SIS d n := (map (shift 0 d) (identity_subst n)).
 
   Lemma shift_merge :
     forall e c d1 d2,
@@ -465,7 +604,7 @@ Module abt (O : OPERATOR).
       now rewrite Nat.add_shuffle3.
   Qed.
 
-  Lemma identity_subst_wf :
+  Lemma wf_identity_subst :
     forall n,
       Forall (wf n) (identity_subst n).
   Proof.
@@ -506,7 +645,7 @@ Module abt (O : OPERATOR).
     unfold descend.
     rewrite Forall_app.
     split.
-    - eapply Forall_impl; [|apply identity_subst_wf].
+    - eapply Forall_impl; [|apply wf_identity_subst].
       eauto using wf_weaken with arith.
     - rewrite Forall_map.
       eapply Forall_impl; [|eassumption].
@@ -693,5 +832,130 @@ Module abt (O : OPERATOR).
     intros e.
     now rewrite shift_nop_d.
   Qed.
-End abt.
 
+  Lemma descend_1 :
+    forall rho,
+      descend 1 rho = var 0 :: map (shift 0 1) rho.
+  Proof. reflexivity. Qed.
+  
+  Fixpoint ws (e : t) {struct e} :=
+    let fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
+        match a, bs with
+        | [], [] => True
+        | v :: a, b :: bs => ws_binder v b /\ go_list a bs
+        | _, _ => False
+        end
+    in
+    match e with
+    | var n => True
+    | op o bs => go_list (O.arity o) bs
+    end
+  with
+  ws_binder (v : valence.t) (b : binder) {struct b} :=
+    match b with
+    | bind v' e => v = v' /\ ws e
+    end.
+  Definition ws_binders :=
+    fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
+        match a, bs with
+        | [], [] => True
+        | v :: a, b :: bs => ws_binder v b /\ go_list a bs
+        | _, _ => False
+        end.
+
+  Lemma ws_var : forall n, ws (var n).
+  Proof. simpl. intuition. Qed.
+
+  Lemma ws_op : forall o bs, Forall2 ws_binder (O.arity o) bs -> ws (op o bs).
+  Proof.
+    simpl.
+    fold ws_binders.
+    intros o bs.
+    generalize (O.arity o). clear o.
+    intros a.
+    induction 1; simpl; intuition.
+  Qed.
+
+  Lemma ws_binder_bind : forall v e, ws e -> ws_binder v (bind v e).
+  Proof. simpl. intuition. Qed.
+
+  Lemma ws_shift :
+    forall e c d,
+      ws e ->
+      ws (shift c d e).
+  Proof.
+    induction e using rect
+    with (Pb := fun b => forall v c d, ws_binder v b ->
+                               ws_binder v (shift_binder c d b))
+           (Pbl := fun bs => forall a c d , ws_binders a bs ->
+                                    ws_binders a (shift_binders c d bs));
+      simpl; intros rho; fold shift_binders ws_binders in *;
+        autorewrite with list in *;
+        f_equal; intuition.
+    break_match; intuition.
+  Qed.
+
+  Lemma ws_SIS :
+    forall n d,
+      Forall ws (SIS d n).
+  Proof.
+    induction n; simpl; intros d; constructor.
+    - exact I.
+    - rewrite map_map.
+      erewrite map_ext.
+      apply (IHn (S d)).
+      intros e.
+      rewrite shift_merge.
+      f_equal.
+      omega.
+  Qed.
+  
+  Lemma ws_identity_subst :
+    forall n,
+      Forall ws (identity_subst n).
+  Proof.
+    intros n.
+    rewrite <- SIS_0.
+    apply ws_SIS.
+  Qed.
+
+  Lemma ws_descend :
+    forall s rho,
+      Forall ws rho -> 
+      Forall ws (descend s rho).
+  Proof.
+    unfold descend.
+    intros s rho F.
+    rewrite Forall_app.
+    split.
+    - auto using ws_identity_subst.
+    - rewrite Forall_map.
+      eapply Forall_impl; try eassumption.
+      auto using ws_shift.
+  Qed.
+  
+  Lemma ws_subst :
+    forall e rho,
+      ws e -> 
+      Forall ws rho ->
+      ws (subst rho e).
+  Proof.
+    induction e using rect
+    with (Pb := fun b => forall rho v, ws_binder v b -> Forall ws rho ->
+                               ws_binder v (subst_binder rho b))
+         (Pbl := fun bs => forall rho a , ws_binders a bs -> Forall ws rho ->
+                                 ws_binders a (subst_binders rho bs));
+      simpl; intros rho; fold subst_binders ws_binders in *;
+        autorewrite with list in *;
+        f_equal; intuition.
+    - break_match.
+      + eapply Forall_nth; eauto.
+      + do_nth_error_Some.
+        intuition.
+    - apply IHe; auto.
+      auto using ws_descend.
+    - break_match; intuition.
+  Qed.
+End internal.
+
+Module abt (O : OPERATOR) : ABT with Module O := O := internal O.
