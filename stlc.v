@@ -28,7 +28,7 @@ Module type.
 End type.
 
 Module expr.
-  Module A := abt.internal exprop.
+  Module A := abt.abt exprop.
 
   Inductive t :=
   | var (x : nat) : t

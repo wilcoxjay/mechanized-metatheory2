@@ -132,9 +132,63 @@ Module Type ABT.
         | b :: bs => wf_binder n b /\ go_list n bs
         end.
 
-  Parameter subst : list t -> t -> t.
-  Parameter shift : nat -> nat -> t -> t.
-  Parameter identity_subst : nat -> list t.
+  Fixpoint shift (c d : nat) (e : t) : t :=
+    let fix go_list (c d : nat) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => shift_binder c d b :: go_list c d bs
+        end
+    in
+        match e with
+        | var x => var (if x <? c then x else x + d)
+        | op o bs => op o (go_list c d bs)
+        end
+  with shift_binder (c d : nat) (b : binder) : binder :=
+         match b with
+         | bind n e => bind n (shift (n + c) d e)
+         end
+  .
+  Definition shift_binders :=
+    fix go_list (c d : nat) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => shift_binder c d b :: go_list c d bs
+        end.
+
+  Fixpoint identity_subst (n : nat) : list t :=
+    match n with
+    | 0 => []
+    | S n => var 0 :: map (shift 0 1) (identity_subst n)
+    end.
+
+  Definition descend (n : nat) (rho : list t) : list t :=
+    (identity_subst n ++ map (shift 0 n) rho).
+
+  Fixpoint subst (rho : list t) (e : t) : t :=
+    let fix go_list (rho : list t) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => subst_binder rho b :: go_list rho bs
+        end
+    in
+    match e with
+    | var x => match nth_error rho x with
+              | Some e' => e'
+              | None => e
+              end
+    | op o bs => op o (go_list rho bs)
+    end
+  with subst_binder (rho : list t) (b : binder) : binder :=
+         match b with
+         | bind n e => bind n (subst (descend n rho) e)
+         end
+  .
+  Definition subst_binders :=
+    fix go_list (rho : list t) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => subst_binder rho b :: go_list rho bs
+        end.
 
   Parameter ws_shift : forall e c d, ws e -> ws (shift c d e).
   Parameter ws_subst :
@@ -146,13 +200,29 @@ Module Type ABT.
       wf (length rho) e -> List.Forall (wf n) rho -> wf n (subst rho e).
   Parameter wf_identity_subst : forall n, Forall (wf n) (identity_subst n).
   Parameter wf_weaken : forall e n d, n <= d -> wf n e -> wf d e.
+  Parameter wf_shift_inv : forall e c d n, wf n (shift c d e) -> wf (max c (n - d)) e.
+  Parameter wf_subst_inv : forall e n rho, wf n (subst rho e) -> wf (max n (length rho)) e.
 
   Parameter identity_subst_length : forall n, length (identity_subst n) = n.
 
   Parameter shift_merge : forall e c d1 d2, shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Parameter shift_nop_d : forall e c, shift c 0 e = e.
+
+  Parameter subst_subst :
+    forall e rho1 rho2,
+      wf (List.length rho1) e ->
+      List.Forall (wf (List.length rho2)) rho1 ->
+      subst rho2 (subst rho1 e) =
+      subst (List.map (subst rho2) rho1) e.
+
+  Parameter subst_identity : forall e n, subst (identity_subst n) e = e.
+  Parameter subst_shift_singleton : forall e e', wf 0 e -> subst [e'] (shift 0 1 e) = e.
+
+  Parameter descend_0 : forall rho, descend 0 rho = rho.
+  Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
 End ABT.
 
-Module internal (O : OPERATOR).
+Module abt (O : OPERATOR) : ABT with Module O := O.
   Module O := O.
   Local Unset Elimination Schemes.
   Inductive t : Type :=
@@ -611,7 +681,7 @@ Module internal (O : OPERATOR).
     induction n; simpl; constructor.
     - simpl. omega.
     - rewrite Forall_map. eapply Forall_impl; [|apply IHn].
-      intros ty WF.
+      intros e WF.
       now apply wf_shift with (c := 0) (d := 1).
   Qed.
 
@@ -677,6 +747,63 @@ Module internal (O : OPERATOR).
     - apply IHe.
       + now autorewrite with list.
       + now apply descend_wf.
+  Qed.
+
+  Lemma wf_shift_inv :
+    forall e c d n,
+      wf n (shift c d e) ->
+      wf (max c (n - d)) e.
+  Proof.
+    induction e using rect
+    with (Pb := fun b =>
+              forall c d n,
+                wf_binder n (shift_binder c d b) ->
+                wf_binder (max c (n - d)) b)
+         (Pbl := fun bs =>
+              forall c d n,
+                wf_binders n (shift_binders c d bs) ->
+                wf_binders (max c (n - d)) bs);
+    simpl; intros c d n; fold subst_binders shift_binders wf_binders in *;
+        f_equal; intuition; autorewrite with list in *.
+    - do_ltb; do_max_spec; omega.
+    - apply IHe in H.
+      eapply wf_weaken; [|eassumption].
+      pose proof Nat.max_spec (s + c) (s + n - d).
+      pose proof Nat.max_spec c (n - d).
+      omega.
+  Qed.
+
+  Lemma wf_subst_inv :
+    forall e n rho, 
+      wf n (subst rho e) ->
+      wf (max n (length rho)) e.
+  Proof.
+    induction e using rect
+    with (Pb := fun b =>
+                  forall n rho,
+                    wf_binder n (subst_binder rho b) ->
+                    wf_binder (max n (length rho)) b)
+         (Pbl := fun bs =>
+                  forall n rho,
+                    wf_binders n (subst_binders rho bs) ->
+                    wf_binders (max n (length rho)) bs);
+      simpl; intros n rho; fold subst_binders shift_binders wf_binders in *;
+        f_equal; intuition; autorewrite with list in *.
+    - break_match.
+      + do_nth_error_Some.
+        assert (x < length rho) by (intuition congruence).
+        do_max_spec.
+        omega.
+      + simpl in *.
+        do_max_spec.
+        omega.
+    - apply IHe in H.
+      rewrite descend_length in *.
+      assert (Init.Nat.max (s + n) (s + length rho) = s + Init.Nat.max n (length rho)).
+      do_max_spec.
+      pose proof Nat.max_spec n (length rho).
+      omega.
+      congruence.
   Qed.
 
   Lemma subst_subst :
@@ -837,7 +964,7 @@ Module internal (O : OPERATOR).
     forall rho,
       descend 1 rho = var 0 :: map (shift 0 1) rho.
   Proof. reflexivity. Qed.
-  
+   
   Fixpoint ws (e : t) {struct e} :=
     let fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
         match a, bs with
@@ -956,6 +1083,199 @@ Module internal (O : OPERATOR).
       auto using ws_descend.
     - break_match; intuition.
   Qed.
-End internal.
+End abt.
 
-Module abt (O : OPERATOR) : ABT with Module O := O := internal O.
+Module Type SYNTAX_BASIS.
+  Declare Module A : ABT.
+
+  Parameter t : Type.
+
+  Parameter to_abt : t -> A.t.
+  Parameter of_abt : A.t -> t.
+
+  Parameter ws_to_abt : forall e, A.ws (to_abt e).
+  Parameter of_to_abt : forall e, of_abt (to_abt e) = e.
+  Parameter to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
+
+  Parameter shift : nat -> nat -> t -> t.
+  Parameter shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
+
+  Parameter subst : list t -> t -> t.
+  Parameter subst_to_abt_comm : forall e rho,
+      to_abt (subst rho e) = A.subst (map to_abt rho) (to_abt e).
+
+  Parameter wf : nat -> t -> Prop.
+  Parameter wf_to_abt : forall e n, wf n e <-> A.wf n (to_abt e).
+
+  Parameter identity_subst : nat -> list t.
+  Parameter identity_subst_to_abt_comm : forall n, map to_abt (identity_subst n) = A.identity_subst n.
+End SYNTAX_BASIS.
+
+Module abt_util (SB : SYNTAX_BASIS).
+  Include SB.
+
+  Lemma wf_of_abt :
+    forall a n,
+      A.ws a -> 
+      wf n (of_abt a) <-> A.wf n a.
+  Proof.
+    intros.
+    pose proof wf_to_abt (of_abt a) n.
+    rewrite to_of_abt in *; auto.
+  Qed.
+
+  Lemma wf_shift : forall e c d n, wf n e -> wf (d + n) (shift c d e).
+  Proof.
+    intros.
+    rewrite wf_to_abt in *.
+    rewrite shift_to_abt_comm.
+    now apply A.wf_shift.
+  Qed.
+
+  Lemma map_subst_to_abt_comm :
+    forall rho1 rho2,
+      map to_abt (map (subst rho2) rho1) =
+      map (A.subst (map to_abt rho2)) (map to_abt rho1).
+  Proof.
+    intros rho1 rho2.
+    rewrite !map_map.
+    apply map_ext.
+    intros e'.
+    auto using subst_to_abt_comm.
+  Qed.
+
+  Lemma wf_subst : forall e n rho, wf (length rho) e -> Forall (wf n) rho -> wf n (subst rho e).
+  Proof.
+    intros e n rho WF F.
+    rewrite wf_to_abt in *.
+    rewrite subst_to_abt_comm.
+    apply A.wf_subst.
+    - now rewrite map_length.
+    - rewrite Forall_map.
+      eapply Forall_impl; try eassumption.
+      intros e' WF'.
+      now rewrite <- wf_to_abt.
+  Qed.
+
+  Lemma identity_subst_length : forall n, length (identity_subst n) = n.
+  Proof.
+    intros.
+    pose proof A.identity_subst_length n.
+    rewrite <- identity_subst_to_abt_comm in *.
+    now rewrite map_length in *.
+  Qed.
+
+  Lemma wf_identity_subst: forall n : nat, Forall (wf n) (identity_subst n).
+  Proof.
+    intros.
+    pose proof A.wf_identity_subst n.
+    rewrite <- identity_subst_to_abt_comm in *.
+    rewrite Forall_map in *.
+    eapply Forall_impl; [|eassumption].
+    intros e. simpl.
+    now rewrite wf_to_abt.
+  Qed.
+
+  Lemma wf_weaken : forall e n d, n <= d -> wf n e -> wf d e.
+  Proof.
+    intros e n d LE.
+    rewrite !wf_to_abt.
+    eauto using A.wf_weaken.
+  Qed.
+
+  Lemma to_abt_inj :
+    forall e1 e2,
+      to_abt e1 = to_abt e2 -> e1 = e2.
+  Proof.
+    intros e1 e2.
+    rewrite <- of_to_abt with (e := e1).
+    rewrite <- of_to_abt with (e := e2).
+    rewrite !to_of_abt by auto using ws_to_abt.
+    congruence.
+  Qed.
+
+  Lemma shift_merge : forall e c d1 d2 , shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Proof.
+    intros e c d1 d2.
+    apply to_abt_inj.
+    rewrite !shift_to_abt_comm.
+    now rewrite A.shift_merge.
+  Qed.
+
+  Lemma shift_nop_d :
+    forall e c,
+      shift c 0 e = e.
+  Proof.
+    intros e c.
+    apply to_abt_inj.
+    rewrite shift_to_abt_comm.
+    now rewrite A.shift_nop_d.
+  Qed.
+
+  Lemma subst_subst :
+    forall e rho1 rho2,
+      wf (List.length rho1) e ->
+      List.Forall (wf (List.length rho2)) rho1 ->
+      subst rho2 (subst rho1 e) =
+      subst (List.map (subst rho2) rho1) e.
+  Proof.
+    intros e rho1 rho2 WF F.
+    apply to_abt_inj.
+    rewrite !subst_to_abt_comm.
+    rewrite A.subst_subst.
+    - now rewrite map_subst_to_abt_comm.
+    - now rewrite map_length, <- wf_to_abt.
+    - rewrite map_length, Forall_map.
+        eapply Forall_impl; [|eassumption].
+        intros e'.
+        now rewrite wf_to_abt.
+  Qed.
+
+  Lemma subst_shift_singleton :
+    forall e e',
+      wf 0 e ->
+      subst [e'] (shift 0 1 e) = e.
+  Proof.
+    intros.
+    apply to_abt_inj.
+    rewrite subst_to_abt_comm, shift_to_abt_comm.
+    simpl.
+    rewrite A.subst_shift_singleton; auto.
+    now rewrite <- wf_to_abt.
+  Qed.
+
+  Lemma subst_identity :
+    forall e n,
+      subst (identity_subst n) e = e.
+  Proof.
+    intros e n.
+    apply to_abt_inj.
+    rewrite subst_to_abt_comm, identity_subst_to_abt_comm.
+    now rewrite A.subst_identity.
+  Qed.
+
+  Lemma wf_subst_inv :
+    forall e n rho, 
+      wf n (subst rho e) ->
+      wf (max n (length rho)) e.
+  Proof.
+    intros e n rho.
+    rewrite !wf_to_abt.
+    rewrite subst_to_abt_comm.
+    intros WF.
+    apply A.wf_subst_inv in WF.
+    now rewrite map_length in WF.
+  Qed.
+
+  Lemma wf_shift_inv :
+    forall e c d n,
+      wf n (shift c d e) ->
+      wf (max c (n - d)) e.
+  Proof.
+    intros e c d n.
+    rewrite !wf_to_abt.
+    rewrite shift_to_abt_comm.
+    intros WF.
+    now apply A.wf_shift_inv in WF.
+  Qed.
+End abt_util.

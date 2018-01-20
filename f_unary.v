@@ -313,6 +313,7 @@ Proof.
         apply Forall2_map.
         apply Forall2_forall_suff_weak; auto.
         intros.
+        unfold type_basis.t in *.
         assert (y = z) by congruence.
         subst.
         apply V_shift'; auto.
@@ -370,6 +371,7 @@ Proof.
   induction HT; intros d g ? WFd WFg; subst n.
   - simpl. apply V_E; auto.
     destruct (Forall2_nth_error_r WFg H) as [v [Hv HV]].
+    unfold expr.t in *.
     now rewrite Hv.
   - apply V_E; auto.
     cbn [expr.subst V].
@@ -581,3 +583,71 @@ Proof.
   apply step.beta; auto.
   auto.
 Qed.
+
+Corollary there_are_two_bools :
+  forall e ty v1 v2,
+    has_type.t 0 [] e (type.all (type.arrow (type.var 0)
+                                            (type.arrow (type.var 0) (type.var 0)))) ->
+    has_type.t 0 [] v1 ty -> 
+    has_type.t 0 [] v2 ty ->
+    value.t v1 ->
+    value.t v2 ->
+    step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v1 \/
+    step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v2.
+Proof.
+  intros e ty v1 v2 HTe HTv1 HTv2 Val1 Val2.
+  apply fundamental_closed in HTe.
+  destruct HTe as [f [Star [Valf Vf]]].
+  cbn [V] in Vf.
+  destruct Vf as [WFf [body [? Hf]]]. subst f.
+  set (S := fun x => x = v1 \/ x = v2).
+  assert (semtype.wf S) as SWF.
+  { unfold semtype.wf. subst S. simpl. intros.
+    intuition; subst; auto.
+    - now apply has_type.t_expr_wf in HTv1.
+    - now apply has_type.t_expr_wf in HTv2.
+  }
+
+  specialize (Hf S SWF).
+  destruct Hf as [v' [Star' [Val' [WFv' [body' [? Hbody']]]]]].
+  simpl in Hbody'. subst v'.
+  specialize (Hbody' v1 (or_introl eq_refl)).
+  destruct Hbody' as [v'' [Star'' [Val'' [WFv'' [body'' [? Hbody'']]]]]].
+  subst v''.
+  specialize (Hbody'' v2 (or_intror eq_refl)).
+  destruct Hbody'' as [v''' [Star''' [Val''' Sv''']]].
+  destruct Sv'''; [left|right]; subst v'''.
+  - eapply step.star_trans.
+    apply step.star_app1.
+    eapply step.star_trans.
+    apply step.star_app1.
+    eapply step.star_trans.
+    apply step.star_tyapp.
+    eauto.
+    eapply step.step_l.
+    apply step.tybeta.
+    eauto.
+    eapply step.step_l.
+    apply step.beta. assumption.
+    eauto.
+    eapply step.step_l.
+    apply step.beta. assumption.
+    assumption.
+  - eapply step.star_trans.
+    apply step.star_app1.
+    eapply step.star_trans.
+    apply step.star_app1.
+    eapply step.star_trans.
+    apply step.star_tyapp.
+    eauto.
+    eapply step.step_l.
+    apply step.tybeta.
+    eauto.
+    eapply step.step_l.
+    apply step.beta. assumption.
+    eauto.
+    eapply step.step_l.
+    apply step.beta. assumption.
+    assumption.
+Qed.
+

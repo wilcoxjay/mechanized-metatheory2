@@ -217,7 +217,10 @@ Ltac do_ltb :=
   match goal with
   | [ |- context [ if ?x <? ?y then _ else _ ] ] =>
     destruct (Nat.ltb_spec x y)
+  | [ H : context [ if ?x <? ?y then _ else _ ] |- _ ] =>
+    destruct (Nat.ltb_spec x y)
   end.
+
 Ltac do_app2_minus :=
   match goal with
   | [  |- context [ ?x + ?r2 - ?r1 - ?r2 ] ] =>
@@ -230,3 +233,11 @@ Ltac do_nth_error_Some :=
   | [  |- context [ nth_error ?l ?n] ] => pose proof nth_error_Some l n
   | [ H : context [ nth_error ?l ?n] |- _ ] => pose proof nth_error_Some l n
   end.
+
+Ltac do_max_spec :=
+      match goal with
+      | [ H : context [ Init.Nat.max ?x ?y ] |- _ ] =>
+        pose proof Nat.max_spec x y
+      | [ |- context [ Init.Nat.max ?x ?y ] ] => 
+        pose proof Nat.max_spec x y
+      end.
