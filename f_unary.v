@@ -39,6 +39,14 @@ Fixpoint V ty (d : list semtype.t) e :=
       forall (S : semtype.t),
         semtype.wf S  ->
         terminating.t (V ty' (S :: d)) body
+  | type.exist ty' =>
+    expr.wf 0 e /\
+    exists v,
+      value.t v /\
+      e = expr.pack v /\
+      exists S : semtype.t,
+        semtype.wf S /\
+        V ty' (S :: d) v
   end.
 
 Notation E ty d :=
@@ -59,6 +67,8 @@ Proof.
     subst. constructor.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
+  - destruct HV as [WF [v' [Valv' [? [S [SWF Vv']]]]]].
+    subst. constructor. auto.
 Qed.
 
 Lemma V_wf :
@@ -116,7 +126,7 @@ Lemma V_shift :
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty as [alpha| |]; intros d1 d2 d3 v F; [|split|].
+  induction ty as [alpha| | |]; intros d1 d2 d3 v F; [|split| |].
   - simpl.
     destruct (Nat.ltb_spec alpha (length d1)).
     + rewrite !nth_error_app1 by assumption. intuition.
@@ -168,6 +178,16 @@ Proof.
       specialize (IHty (S :: d1) d2 d3 v2).
       apply IHty; auto.
       simpl. constructor; auto.
+  - simpl.
+    split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
+      split; auto; subst v; eexists; (split; [eassumption|]); (split; [reflexivity|]);
+        exists S; (split; [assumption|]).
+    + rewrite app_comm_cons.
+      rewrite <- IHty with (d1 := (S :: d1)); auto.
+      constructor; auto.
+    + rewrite app_comm_cons in *.
+      rewrite IHty with (d1 := (S :: d1)); eauto.
+      constructor; auto.
 Qed.
 
 Lemma V_shift' :
@@ -284,6 +304,17 @@ Proof.
       apply SWF.
       apply IHty.
       constructor; intuition.
+  - split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
+      split; auto; subst e; eexists; (split; [eassumption|]); (split; [reflexivity|]);
+        exists S; (split; [assumption|]).
+    + rewrite <- IHty.
+      apply Vv'.
+      constructor; auto.
+      intuition.
+    + rewrite IHty.
+      apply Vv'.
+      constructor; auto.
+      intuition.
 Qed.
 
 Lemma V_subst :
@@ -332,6 +363,48 @@ Proof.
         apply Forall2_map.
         apply Forall2_forall_suff_weak; auto.
         intros.
+        unfold type_basis.t in *.
+        assert (y = z) by congruence.
+        subst.
+        rewrite <- V_shift'; intuition.
+      * simpl. rewrite map_length. auto.
+      * simpl. constructor; [simpl; omega|].
+        rewrite Forall_map.
+        apply Forall_from_nth.
+        intros.
+        apply type.wf_shift with (d := 1).
+        eapply Forall_nth; eauto.
+      * constructor; auto.
+  - split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
+      split; auto; subst e; eexists; (split; [eassumption|]); (split; [reflexivity|]);
+        exists S; (split; [assumption|]).
+    + rewrite IHty in Vv'.
+      * simpl in Vv'. rewrite map_map in Vv'.
+        eapply V_ext; [|apply Vv'].
+        constructor; [now intuition|].
+        apply Forall2_map.
+        apply Forall2_forall_suff_weak; auto.
+        intros.
+        unfold type_basis.t in *.
+        assert (y = z) by congruence.
+        subst.
+        apply V_shift'; auto.
+      * simpl. rewrite map_length. auto.
+      * simpl. constructor; [simpl; omega|].
+        rewrite Forall_map.
+        apply Forall_from_nth.
+        intros.
+        apply type.wf_shift with (d := 1).
+        eapply Forall_nth; eauto.
+      * constructor; auto.
+    + rewrite IHty.
+      * simpl. rewrite map_map.
+        eapply V_ext; [|apply Vv'].
+        constructor; [now intuition|].
+        apply Forall2_map.
+        apply Forall2_forall_suff_weak; auto.
+        intros.
+        unfold type_basis.t in *.
         assert (y = z) by congruence.
         subst.
         rewrite <- V_shift'; intuition.
@@ -479,6 +552,86 @@ Proof.
       apply V_ext.
       constructor; [now intuition|].
       apply V_map_identity'.
+  - specialize (IHHT GWF d g eq_refl WFd WFg).
+    destruct IHHT as [v [Star [Val Vv]]].
+    rewrite V_subst in Vv; auto using type.wf_identity_subst.
+    + cbn [expr.subst].
+      eapply E_star.
+      apply step.star_pack. eassumption.
+      apply V_E; auto.
+      rewrite V_ext with (d2 := V ty_rep d :: d) in Vv
+        by (simpl; constructor; intuition; apply V_map_identity').
+      cbn [V].
+      split.
+      * simpl. eauto using V_wf, V_semtype.
+      * eauto 10 using V_semtype.
+    + apply has_type.t_type_wf in HT; [|assumption].
+      apply type.wf_subst_inv in HT.
+      cbn [length] in *. rewrite type.identity_subst_length in *.
+      now rewrite Nat.max_r in * by omega.
+  - subst ty2.
+    specialize (IHHT1 GWF d g eq_refl WFd WFg).
+    destruct IHHT1 as [v1 [Star1 [Val1 Vv1]]].
+    cbn [V] in Vv1.
+    destruct Vv1 as [WFv1 [v2 [Val2 [? [S [SWF Vv2]]]]]].
+    subst v1.
+    cbn [expr.subst].
+    eapply E_star.
+    eapply step.star_trans.
+    apply step.star_unpack. eassumption.
+    eapply step.step_l.
+    apply step.packbeta. assumption.
+    constructor.
+
+    set (G' := ty1 :: map (type.shift 0 1) G) in *.
+    assert (Forall (type.wf (Datatypes.S (length d))) G') as G'WF.
+    { subst G'. constructor.
+      - apply has_type.t_type_wf in HT1; auto.
+      - rewrite Forall_map.
+        eapply Forall_impl; [|eassumption].
+        intros ty WF.
+        now apply type.wf_shift with (d := 1).
+    }
+    specialize (IHHT2 G'WF (S :: d) (v2 :: g) eq_refl ltac:(auto)).
+
+    assert (Forall2 (fun ty e => V ty (S :: d) e) G' (v2 :: g)) as WFg'.
+    {
+      constructor; auto.
+      apply Forall2_map_l.
+      eapply Forall2_impl; [|eassumption]. simpl.
+      intros ty e.
+      now rewrite <- V_shift'.
+    }
+    specialize (IHHT2 WFg').
+    destruct IHHT2 as [v3 [Star3 [Val3 Vv3]]].
+    assert (Forall (expr.wf 0) g).
+    {
+      apply Forall_forall.
+      intros e I.
+      apply In_nth_error in I.
+      destruct I as [n NE].
+      eapply (Forall2_nth_error_l WFg) in NE.
+      destruct NE as [ty [_ Ve]].
+      apply V_wf in Ve; auto.
+    }
+
+    rewrite expr.subst_subst.
+    + simpl. rewrite map_map.
+      rewrite <- V_shift' in Vv3 by auto.
+      erewrite map_ext_in, map_id.
+      * eapply E_star. eauto.
+        apply V_E; auto.
+      * intros. rewrite expr.subst_shift_singleton; auto.
+        eapply Forall_forall; eauto.
+    + apply has_type.t_expr_wf in HT2.
+      unfold type.t, type_basis.t in *.
+      rewrite (Forall2_length WFg') in HT2.
+      simpl in *. now rewrite map_length.
+    + simpl. constructor. simpl. omega.
+      rewrite Forall_map.
+      eapply Forall_impl; [|eassumption].
+      intros.
+      now apply expr.wf_shift with (d := 1).
 Qed.
 
 Print Assumptions fundamental.

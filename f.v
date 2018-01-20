@@ -4,6 +4,7 @@ Module tyop.
   Inductive t' :=
   | arrow
   | all
+  | exist
   .
   Definition t := t'.
 
@@ -11,6 +12,7 @@ Module tyop.
     match op with
     | arrow => [0; 0]
     | all => [1]
+    | exist => [1]
     end.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
@@ -25,6 +27,8 @@ Module exprop.
   | app
   | tyabs
   | tyapp
+  | pack
+  | unpack
   .
   Definition t := t'.
 
@@ -34,6 +38,8 @@ Module exprop.
     | app => [0; 0]
     | tyabs => [0]
     | tyapp => [0]
+    | pack => [0]
+    | unpack => [0; 1]
     end.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
@@ -48,6 +54,7 @@ Module type_ast.
   | var (alpha : nat) : t
   | arrow : t -> t -> t
   | all : t -> t
+  | exist : t -> t
   .
 End type_ast.
 
@@ -62,6 +69,7 @@ Module type_basis.
     | var n => A.var n
     | arrow ty1 ty2 => A.op tyop.arrow [A.bind 0 (to_abt ty1); A.bind 0 (to_abt ty2)]
     | all ty' => A.op tyop.all [A.bind 1 (to_abt ty')]
+    | exist ty' => A.op tyop.exist [A.bind 1 (to_abt ty')]
     end.
 
   Fixpoint of_abt (a : A.t) : t :=
@@ -69,6 +77,7 @@ Module type_basis.
     | A.var n => var n
     | A.op tyop.arrow [A.bind 0 a1; A.bind 0 a2] => arrow (of_abt a1) (of_abt a2)
     | A.op tyop.all [A.bind 1 a'] => all (of_abt a')
+    | A.op tyop.exist [A.bind 1 a'] => exist (of_abt a')
     | _ => var 0 (* bogus *)
     end.
 
@@ -99,6 +108,7 @@ Module type_basis.
     | var alpha => var (if alpha <? c then alpha else alpha + d)
     | arrow ty1 ty2 => arrow (shift c d ty1) (shift c d ty2)
     | all ty' => all (shift (S c) d ty')
+    | exist ty' => exist (shift (S c) d ty')
     end.
 
   Lemma shift_to_abt_comm : forall ty c d, to_abt (shift c d ty) = A.shift c d (to_abt ty).
@@ -112,6 +122,7 @@ Module type_basis.
                   end
     | arrow ty1 ty2 => arrow (subst rho ty1) (subst rho ty2)
     | all ty' => all (subst (var 0 :: map (shift 0 1) rho) ty')
+    | exist ty' => exist (subst (var 0 :: map (shift 0 1) rho) ty')
     end.
 
   Lemma map_shift_to_abt_comm :
@@ -130,6 +141,8 @@ Module type_basis.
     - rewrite nth_error_map. break_match; auto.
     - rewrite IHty. simpl.
       now rewrite map_shift_to_abt_comm.
+    - rewrite IHty. simpl.
+      now rewrite map_shift_to_abt_comm.
   Qed.
 
   Fixpoint wf n ty :=
@@ -137,6 +150,7 @@ Module type_basis.
     | var alpha => alpha < n
     | arrow ty1 ty2 => wf n ty1 /\ wf n ty2
     | all ty' => wf (S n) ty'
+    | exist ty' => wf (S n) ty'
     end.
 
   Lemma wf_to_abt : forall ty n, wf n ty <-> A.wf n (to_abt ty).
@@ -162,6 +176,7 @@ Module type.
    Notation var := type_ast.var.
    Notation arrow := type_ast.arrow.
    Notation all := type_ast.all.
+   Notation exist := type_ast.exist.
 End type.
 
 Module expr_abt := abt.abt exprop.
@@ -173,6 +188,8 @@ Module expr_ast.
   | app : t -> t -> t
   | tyabs : t -> t
   | tyapp : t -> t
+  | pack : t -> t
+  | unpack : t -> t -> t
   .
 End expr_ast.
 
@@ -189,6 +206,8 @@ Module expr_basis.
     | app e1 e2 => A.op exprop.app [A.bind 0 (to_abt e1); A.bind 0 (to_abt e2)]
     | tyabs e' => A.op exprop.tyabs [A.bind 0 (to_abt e')] 
     | tyapp e' => A.op exprop.tyapp [A.bind 0 (to_abt e')]
+    | pack e' => A.op exprop.pack [A.bind 0 (to_abt e')] 
+    | unpack e1 e2 => A.op exprop.unpack [A.bind 0 (to_abt e1); A.bind 1 (to_abt e2)] 
     end.
 
   Fixpoint of_abt (a : A.t) : t :=
@@ -198,6 +217,8 @@ Module expr_basis.
     | A.op exprop.app [A.bind 0 a1; A.bind 0 a2] => app (of_abt a1) (of_abt a2)
     | A.op exprop.tyabs [A.bind 0 a'] => tyabs (of_abt a')
     | A.op exprop.tyapp [A.bind 0 a'] => tyapp (of_abt a')
+    | A.op exprop.pack [A.bind 0 a'] => pack (of_abt a')
+    | A.op exprop.unpack [A.bind 0 a1; A.bind 1 a2] => unpack (of_abt a1) (of_abt a2)
     | _ => var 0 (* bogus *)
     end.
 
@@ -230,6 +251,8 @@ Module expr_basis.
     | app e1 e2 => app (shift c d e1) (shift c d e2)
     | tyabs e' => tyabs (shift c d e')
     | tyapp e' => tyapp (shift c d e')
+    | pack e' => pack (shift c d e')
+    | unpack e1 e2 => unpack (shift c d e1) (shift (S c) d e2)
     end.
 
   Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
@@ -245,6 +268,8 @@ Module expr_basis.
     | app e1 e2 => app (subst rho e1) (subst rho e2)
     | tyabs e' => tyabs (subst rho e')
     | tyapp e' => tyapp (subst rho e')
+    | pack e' => pack (subst rho e')
+    | unpack e1 e2 => unpack (subst rho e1) (subst (var 0 :: map (shift 0 1) rho) e2)
     end.
 
   Lemma map_shift_to_abt_comm :
@@ -263,6 +288,8 @@ Module expr_basis.
     - rewrite nth_error_map. break_match; auto.
     - rewrite IHe. simpl.
       now rewrite map_shift_to_abt_comm.
+    - rewrite IHe2. simpl.
+      now rewrite map_shift_to_abt_comm.
   Qed.
 
   Fixpoint wf n e :=
@@ -272,6 +299,8 @@ Module expr_basis.
     | app e1 e2 => wf n e1 /\ wf n e2
     | tyabs e' => wf n e'
     | tyapp e' => wf n e'
+    | pack e' => wf n e'
+    | unpack e1 e2 => wf n e1 /\ wf (S n) e2
     end.
 
   Lemma wf_to_abt : forall e n, wf n e <-> A.wf n (to_abt e).
@@ -299,6 +328,8 @@ Module expr.
   Notation app := expr_ast.app.
   Notation tyabs := expr_ast.tyabs.
   Notation tyapp := expr_ast.tyapp.
+  Notation pack := expr_ast.pack.
+  Notation unpack := expr_ast.unpack.
 End expr.
 
 Module has_type.
@@ -312,7 +343,7 @@ Module has_type.
       t n (ty1 :: G) e ty2 ->
       t n G (expr.abs e) (type.arrow ty1 ty2)
   | app : forall n G ty1 ty2 e1 e2,
-      t n G e1 (type.arrow ty1 ty2) -> 
+      t n G e1 (type.arrow ty1 ty2) ->
       t n G e2 ty1 ->
       t n G (expr.app e1 e2) ty2
 
@@ -323,6 +354,16 @@ Module has_type.
       type.wf n ty ->
       t n G e (type.all ty_body) ->
       t n G (expr.tyapp e) (type.subst (ty :: type.identity_subst n) ty_body)
+
+  | pack : forall n G e ty_interface ty_rep,
+      type.wf n ty_rep -> 
+      t n G e (type.subst (ty_rep :: type.identity_subst n) ty_interface) ->
+      t n G (expr.pack e) (type.exist ty_interface)
+  | unpack : forall n G e1 e2 ty1 ty2 ty2',
+      t n G e1 (type.exist ty1) ->
+      t (S n) (ty1 :: map (type.shift 0 1) G) e2 ty2 ->
+      ty2 = type.shift 0 1 ty2' ->
+      t n G (expr.unpack e1 e2) ty2'
   .
 
   Lemma t_type_wf :
@@ -342,6 +383,24 @@ Module has_type.
       + simpl. now rewrite type.identity_subst_length in *.
       + constructor; auto.
         apply type.wf_identity_subst.
+    - apply type.wf_subst_inv in H1.
+      simpl in *. rewrite type.identity_subst_length in *.
+      now rewrite Nat.max_r in * by omega.
+    - subst ty2.
+      assert (type.wf (S n) (type.shift 0 1 ty2')).
+      {
+        apply IHt2.
+        constructor; auto.
+        rewrite Forall_map.
+        apply Forall_forall.
+        intros ty' I.
+        apply type.wf_shift with (d := 1).
+        eapply Forall_forall; eauto.
+      }
+
+      apply type.wf_shift_inv with (c := 0) (d := 1) in H1.
+      simpl in *.
+      now rewrite Nat.sub_0_r in *.
   Qed.
 
   Lemma t_expr_wf :
@@ -352,6 +411,7 @@ Module has_type.
     induction 1; simpl in *; intuition.
     - apply nth_error_Some. congruence.
     - now rewrite map_length in *.
+    - now rewrite map_length in *.
   Qed.
 End has_type.
 
@@ -359,6 +419,7 @@ Module value.
   Inductive t : expr.t -> Prop :=
   | abs : forall e, t (expr.abs e)
   | tyabs : forall e, t (expr.tyabs e)
+  | pack : forall e, t e -> t (expr.pack e)
   .
 End value.
 
@@ -380,6 +441,15 @@ Module step.
   | tybeta : forall body,
       t (expr.tyapp (expr.tyabs body))
         body
+  | pack : forall e e',
+      t e e' ->
+      t (expr.pack e) (expr.pack e')
+  | unpack : forall e1 e1' e2,
+      t e1 e1' ->
+      t (expr.unpack e1 e2) (expr.unpack e1' e2)
+  | packbeta : forall v e2,
+      value.t v -> 
+      t (expr.unpack (expr.pack v) e2) (expr.subst [v] e2)
   .
   Hint Constructors t.
 
@@ -434,6 +504,28 @@ Module step.
     - econstructor; [|apply IHStar]; eauto.
   Qed.
 
+  Lemma star_pack :
+    forall e e',
+      star e e' ->
+      star (expr.pack e) (expr.pack e').
+  Proof.
+    intros e e' Star.
+    induction Star.
+    - constructor.
+    - econstructor; [|apply IHStar]; eauto.
+  Qed.
+
+  Lemma star_unpack :
+    forall e1 e1' e2,
+      star e1 e1' ->
+      star (expr.unpack e1 e2) (expr.unpack e1' e2).
+  Proof.
+    intros e1 e1' e2 Star.
+    induction Star.
+    - constructor.
+    - econstructor; [|apply IHStar]; eauto.
+  Qed.
+
   Lemma star_trans :
     forall e1 e2 e3,
       star e1 e2 ->
@@ -448,13 +540,14 @@ Module step.
   Qed.
 
   Lemma value :
-    forall v e',
+    forall v,
       value.t v ->
+      forall e',
       step.t v e' ->
       False.
   Proof.
-    intros v e' Val Step.
-    inversion Step; subst; inversion Val.
+    induction 1; intros e' Step; inversion Step; subst.
+    eauto.
   Qed.
 
   Lemma star_value :
