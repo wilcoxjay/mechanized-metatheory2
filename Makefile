@@ -7,5 +7,5 @@ clean: Makefile.coq
 
 .PHONY: all clean
 
-Makefile.coq:
+Makefile.coq: _CoqProject
 	coq_makefile -o Makefile.coq -f _CoqProject

@@ -2,5 +2,6 @@
 util.v
 abt.v
 stlc.v
+stlc_unary.v
 f.v
 f_unary.v
