@@ -1,5 +1,4 @@
-Require Import util.
-Require Import abt.
+From mm Require Import util abt.
 
 Module tyop.
   Inductive t' :=

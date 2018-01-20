@@ -1,4 +1,4 @@
-Require Import util f.
+From mm Require Import util f.
 
 Module terminating.
   Definition t (P : expr.t -> Prop) (e : expr.t) :=

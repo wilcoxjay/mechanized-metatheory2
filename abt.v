@@ -1,4 +1,4 @@
-Require Import util.
+Require Import mm.util.
 Set Implicit Arguments.
 
 Module valence.
