@@ -3,5 +3,6 @@ util.v
 abt.v
 stlc.v
 stlc_unary.v
+stlc_binary.v
 f.v
 f_unary.v
