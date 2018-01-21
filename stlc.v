@@ -120,11 +120,15 @@ Module expr_basis.
   Lemma identity_subst_to_abt_comm :
     forall n, List.map to_abt (identity_subst n) = A.identity_subst n.
   Proof. A.basis_util.prove_identity_subst_to_abt_comm map_shift_to_abt_comm. Qed.
+
+  Definition var := var.
+  Arguments var /.
+  Lemma var_to_abt : forall n, to_abt (var n) = A.var n.
+  Proof. reflexivity. Qed.
 End expr_basis.
 
 Module expr.
   Include abt.abt_util expr_basis.
-  Notation var := expr_ast.var.
   Notation abs := expr_ast.abs.
   Notation app := expr_ast.app.
   Notation tt := expr_ast.tt.
@@ -146,80 +150,89 @@ Module has_type.
       t G e2 ty1 ->
       t G (expr.app e1 e2) ty2
   .
-End has_type.
 
+  Lemma wf :
+    forall G e ty,
+      t G e ty ->
+      expr.wf (List.length G) e.
+  Proof.
+    induction 1; simpl in *; intuition.
+    pose proof nth_error_Some G x. intuition congruence.
+  Qed.
+
+  Lemma shift :
+    forall G e ty,
+      t G e ty ->
+      forall G1 G2 G',
+        G1 ++ G2 = G ->
+        t (G1 ++ G' ++ G2) (expr.shift (List.length G1) (List.length G') e) ty.
+  Proof.
+    induction 1; intros G1 G2 G' E; subst G.
+    - constructor.
+      do_ltb.
+      + now rewrite nth_error_app1 in * by assumption.
+      + rewrite !nth_error_app2 in * by omega.
+        now do_app2_minus.
+    - constructor.
+    - cbn [expr.shift].
+      constructor.
+      change (ty1 :: G1 ++ G' ++ G2) with ((ty1 :: G1) ++ G' ++ G2).
+      now apply IHt.
+    - simpl. econstructor.
+      + now apply IHt1.
+      + now apply IHt2.
+  Qed.
+
+  Lemma shift' :
+    forall G e ty G',
+      t G e ty ->
+      t (G' ++ G) (expr.shift 0 (List.length G') e) ty.
+  Proof.
+    intros.
+    now apply shift with (G := G) (G1 := []).
+  Qed.
+
+  Lemma shift_cons :
+    forall G e ty ty0,
+      t G e ty ->
+      t (ty0 :: G) (expr.shift 0 1 e) ty.
+  Proof.
+    intros.
+    now apply shift' with (G' := [ty0]).
+  Qed.
+
+  Lemma subst :
+    forall G e ty,
+      t G e ty ->
+      forall G' rho,
+        List.Forall2 (t G') rho G ->
+        t G' (expr.subst rho e) ty.
+  Proof.
+    induction 1; intros G' rho F; cbn [expr.subst].
+    - destruct (Forall2_nth_error_l F H) as [z [Hz Ht]].
+      unfold expr.t in *.
+      simpl.
+      now rewrite Hz.
+    - constructor.
+    - constructor.
+      apply IHt.
+      constructor.
+      + now constructor.
+      + apply Forall2_map_l.
+        apply Forall2_forall_suff_weak.
+        * now erewrite Forall2_length by eauto.
+        * intros.
+          apply shift_cons.
+          eapply (Forall2_nth_error F); eauto.
+    - econstructor.
+      + now apply IHt1.
+      + now apply IHt2.
+  Qed.
+End has_type.
 
 Module ctx.
   Definition t := list type.t.
 End ctx.
-
-Lemma has_type_shift :
-  forall G e ty,
-    has_type.t G e ty ->
-    forall G1 G2 G',
-      G1 ++ G2 = G ->
-      has_type.t (G1 ++ G' ++ G2) (expr.shift (List.length G1) (List.length G') e) ty.
-Proof.
-  induction 1; intros G1 G2 G' E; subst G.
-  - constructor.
-    do_ltb.
-    + now rewrite nth_error_app1 in * by assumption.
-    + rewrite !nth_error_app2 in * by omega.
-      now do_app2_minus.
-  - constructor.
-  - cbn [expr.shift].
-    constructor.
-    change (ty1 :: G1 ++ G' ++ G2) with ((ty1 :: G1) ++ G' ++ G2).
-    now apply IHt.
-  - simpl. econstructor.
-    + now apply IHt1.
-    + now apply IHt2.
-Qed.
-
-Lemma has_type_shift' :
-  forall G e ty G',
-    has_type.t G e ty ->
-    has_type.t (G' ++ G) (expr.shift 0 (List.length G') e) ty.
-Proof.
-  intros.
-  now apply has_type_shift with (G := G) (G1 := []).
-Qed.
-
-Lemma has_type_shift_cons :
-  forall G e ty ty0,
-    has_type.t G e ty ->
-    has_type.t (ty0 :: G) (expr.shift 0 1 e) ty.
-Proof.
-  intros.
-  now apply has_type_shift' with (G' := [ty0]).
-Qed.
-
-Lemma has_type_subst :
-  forall G e ty,
-    has_type.t G e ty ->
-    forall G' rho,
-      List.Forall2 (has_type.t G') rho G ->
-      has_type.t G' (expr.subst rho e) ty.
-Proof.
-  induction 1; intros G' rho F; cbn [expr.subst].
-  - destruct (Forall2_nth_error_l F H) as [z [Hz Ht]].
-    unfold expr.t in *.
-    now rewrite Hz.
-  - constructor.
-  - constructor.
-    apply IHt.
-    constructor.
-    + now constructor.
-    + apply Forall2_map_l.
-      apply Forall2_forall_suff_weak.
-      * now erewrite Forall2_length by eauto.
-      * intros.
-        apply has_type_shift_cons.
-        eapply (Forall2_nth_error F); eauto.
-  - econstructor.
-    + now apply IHt1.
-    + now apply IHt2.
-Qed.
 
 Module value.
   Inductive t : expr.t -> Prop :=
@@ -294,4 +307,13 @@ Module step.
     apply clos_rt_rtn1.
     eauto using rt_trans.
   Qed.
+
+  Lemma star_refl :
+    forall e,
+      star e e.
+  Proof.
+    constructor.
+  Qed.
+
+  Hint Resolve star_app2 star_app1 star_refl.
 End step.

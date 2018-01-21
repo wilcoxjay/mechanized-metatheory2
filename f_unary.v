@@ -7,6 +7,18 @@ Module terminating.
       value.t v /\
       P v
   .
+
+  Lemma impl :
+    forall (P Q : expr.t -> Prop),
+      (forall e, P e -> Q e) ->
+      (forall e, terminating.t P e -> terminating.t Q e).
+  Proof. firstorder. Qed.
+
+  Lemma iff :
+    forall (P Q : expr.t -> Prop),
+      (forall e, P e <-> Q e) ->
+      (forall e, terminating.t P e <-> terminating.t Q e).
+  Proof. firstorder. Qed.
 End terminating.
 
 Module semtype.
@@ -20,7 +32,7 @@ End semtype.
 
 Fixpoint V ty (d : list semtype.t) e :=
   match ty with
-  | type.var alpha =>
+  | type_ast.var alpha =>
     match nth_error d alpha with
     | Some X => X e
     | None => False
@@ -120,51 +132,29 @@ Proof.
   now induction Star; eauto using E_step.
 Qed.
 
+
 Lemma V_shift :
   forall ty d1 d2 d3 v,
     Forall semtype.wf (d1 ++ d3) ->
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty as [alpha| | |]; intros d1 d2 d3 v F; [|split| |].
+  induction ty as [alpha| | |]; intros d1 d2 d3 v F.
   - simpl.
     destruct (Nat.ltb_spec alpha (length d1)).
     + rewrite !nth_error_app1 by assumption. intuition.
     + rewrite !nth_error_app2 by omega.
       do_app2_minus.
       now auto.
-  - intros Vv.
-    destruct Vv as [WFe [body [? Ebody]]].
-    split; auto.
-    subst v.
-    eexists.
-    split; [reflexivity|].
-    intros v2 V2.
-    assert (E ty2 (d1 ++ d3) (expr.subst [v2] body)) as Ev2.
-    { apply Ebody.
-      eapply IHty1; [assumption|].
-      eauto.
-    }
-    destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
-    eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
-    exists v2'; intuition.
   - simpl.
-    intros Vv.
-    destruct Vv as [WF [body [? Hv]]].
-    intuition.
-    subst v.
-    eexists.
-    split; [reflexivity|].
-    intros v2 V2.
-    assert (E (type.shift (length d1) (length d2) ty2) (d1 ++ d2 ++ d3) (expr.subst [v2] body))
-           as Ev2.
-    {
-      eapply Hv.
-      apply IHty1; auto.
-    }
-    destruct Ev2 as [v2' [Star2' [Val2' Vv2']]].
-    eapply IHty2 with (d2 := d2) in Vv2'; [|assumption].
-    exists v2'; intuition.
+    split; intros Vv; destruct Vv as [WF [body [? Hv]]]; (split; [assumption|]);
+      subst v; eexists; (split; [reflexivity|]);
+        intros v2 V2;
+        [rewrite <- IHty1 in V2 by assumption
+        |rewrite (IHty1 d1 d2 d3) in V2 by assumption];
+        apply Hv in V2;
+        (eapply terminating.impl; [|eassumption]);
+        intros e; rewrite IHty2; eauto.
   - simpl.
     split; intros Vv; destruct Vv as [Wf [body [? Hv]]];
       split; auto; subst v; eexists; (split; [reflexivity|]);
@@ -197,14 +187,6 @@ Lemma V_shift' :
 Proof.
   intros.
   apply V_shift with (d1 := []) (d2 := [S]) (d3 := d); auto.
-Qed.
-
-Lemma terminating_iff :
-  forall (P Q : expr.t -> Prop),
-    (forall e, P e <-> Q e) ->
-    (forall e, terminating.t P e <-> terminating.t Q e).
-Proof.
-  firstorder.
 Qed.
 
 Lemma V_map_identity :
@@ -284,22 +266,22 @@ Proof.
     specialize (IHty2 d1 d2 F).
     split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
       intros e2 V2.
-    + rewrite <- terminating_iff.
+    + rewrite <- terminating.iff.
       apply H.
       firstorder.
       assumption.
-    + rewrite terminating_iff.
+    + rewrite terminating.iff.
       apply H.
       firstorder.
       assumption.
   - split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
       intros S SWF; specialize (IHty (S :: d1) (S :: d2)).
-    + rewrite <- terminating_iff.
+    + rewrite <- terminating.iff.
       apply H.
       apply SWF.
       apply IHty.
       constructor; intuition.
-    + rewrite terminating_iff.
+    + rewrite terminating.iff.
       apply H.
       apply SWF.
       apply IHty.
@@ -426,7 +408,7 @@ Lemma E_subst :
     (forall e, E (type.subst D ty) d e <-> E ty (map (fun ty0 => V ty0 d) D) e).
 Proof.
   intros ty D d TWF F SWF.
-  apply terminating_iff.
+  apply terminating.iff.
   apply V_subst; auto.
 Qed.
 
@@ -547,7 +529,7 @@ Proof.
       apply type.wf_identity_subst.
     + auto.
     + simpl.
-      eapply terminating_iff; [| apply Ebody with (S := V ty d); auto using V_semtype].
+      eapply terminating.iff; [| apply Ebody with (S := V ty d); auto using V_semtype].
       intros e'.
       apply V_ext.
       constructor; [now intuition|].

@@ -162,7 +162,7 @@ Module Type ABT.
     end.
 
   Definition descend (n : nat) (rho : list t) : list t :=
-    (identity_subst n ++ map (shift 0 n) rho).
+    identity_subst n ++ map (shift 0 n) rho.
 
   Fixpoint subst (rho : list t) (e : t) : t :=
     let fix go_list (rho : list t) (bs : list binder) : list binder :=
@@ -220,6 +220,13 @@ Module Type ABT.
 
   Parameter descend_0 : forall rho, descend 0 rho = rho.
   Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
+
+  Parameter subst_cons :
+    forall e v rho,
+      wf (S (length rho)) e ->
+      Forall (wf 0) rho ->
+      subst [v] (subst (descend 1 rho) e) =
+      subst (v :: rho) e.
 
   Module basis_util.
     Ltac prove_ws_to_abt :=
@@ -479,6 +486,14 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     - eapply IHe; try eassumption. omega.
   Qed.
 
+  Lemma shift_nop' :
+    forall e c d,
+      wf c e ->
+      shift c d e = e.
+  Proof.
+    intros.
+    eapply shift_nop; eauto.
+  Qed.
 
   Lemma shift_identity_subst :
     forall n c d,
@@ -887,18 +902,26 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
         auto using descend_wf.
   Qed.
 
+  Lemma nth_error_SIS :
+    forall n s x y,
+      nth_error (SIS s n) x = Some y ->
+      y = var (s + x).
+  Proof.
+    induction n; intros s x y NE; destruct x; simpl in *; try congruence.
+    - rewrite Nat.add_0_r. congruence.
+    - rewrite SIS_merge in *.
+      apply IHn in NE.
+      now rewrite Nat.add_succ_r, Nat.add_1_l, Nat.add_succ_l in *.
+  Qed.
+
   Lemma nth_error_identity_subst :
     forall n x y,
       nth_error (identity_subst n) x = Some y ->
       y = var x.
   Proof.
-    induction n; intros x y NE; destruct x; simpl in *; try congruence.
-    rewrite nth_error_map in NE.
-    break_match; try discriminate.
-    apply IHn in Heqo.
-    subst. simpl in *.
-    rewrite Nat.add_1_r in *.
-    congruence.
+    intros n x y.
+    rewrite <- SIS_0.
+    apply nth_error_SIS.
   Qed.
 
   Lemma SIS_unroll :
@@ -908,6 +931,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     simpl.
     now rewrite SIS_merge.
   Qed.
+
   Lemma SIS_unroll_r :
     forall n d, SIS d (S n) = SIS d n ++ [var (d + n)].
   Proof.
@@ -1133,6 +1157,113 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     - break_match; intuition.
   Qed.
 
+  Lemma map_subst_SIS :
+    forall rho1 rho2,
+      map (subst (rho1 ++ rho2)) (SIS (length rho1) (length rho2)) = rho2.
+  Proof.
+    intros rho1 rho2. revert rho1.
+    induction rho2; simpl; intros rho1.
+    - reflexivity.
+    - f_equal.
+      + rewrite nth_error_app2 by omega.
+        now rewrite Nat.sub_diag.
+      + rewrite SIS_merge.
+        specialize (IHrho2 (rho1 ++ [a])).
+        autorewrite with list in *.
+        simpl in *.
+        now rewrite Nat.add_1_r in *.
+  Qed.
+
+  Lemma map_subst_identity_subst :
+    forall rho,
+      map (subst rho) (identity_subst (length rho)) = rho.
+  Proof.
+    intros rho.
+    pose proof map_subst_SIS [] rho.
+    simpl in *.
+    now rewrite SIS_0 in *.
+  Qed.
+
+  Lemma subst_extend_SIS :
+    forall e rho n,
+      subst rho e = subst (rho ++ SIS (length rho) n) e.
+  Proof.
+    induction e using rect
+    with (Pb := fun b =>
+                  forall rho n,
+                    subst_binder rho b = subst_binder (rho ++ SIS (length rho) n) b)
+         (Pbl := fun bs =>
+                   forall rho n,
+                     subst_binders rho bs = subst_binders (rho ++ SIS (length rho) n) bs);
+      intros rho n; simpl; fold subst_binders; f_equal; auto.
+    - do_nth_error_Some; break_match.
+      + rewrite nth_error_app1 by (apply H; congruence).
+        now rewrite Heqo.
+      + intuition.
+        assert (length rho <= x) by (apply not_lt; intro; auto with * ).
+        rewrite nth_error_app2 by assumption.
+        break_match; auto.
+        apply nth_error_SIS in Heqo0.
+        subst. f_equal.
+        omega.
+    - rewrite IHe with (n := n).
+      rewrite descend_app, descend_length, SIS_merge.
+      now rewrite plus_comm.
+  Qed.
+
+  Lemma subst_shift_id :
+    forall rho e,
+      wf 0 e ->
+      subst rho (shift 0 (length rho) e) = e.
+  Proof.
+    intros rho e WF.
+    pose proof subst_shift' e rho [] WF.
+    rewrite app_nil_r in *.
+    now rewrite subst_identity with (n := 0) in *.
+  Qed.
+
+  Lemma subst_descend :
+    forall rho1 rho2,
+      Forall (wf 0) rho2 ->
+      map (subst rho1) (descend (length rho1) rho2) = rho1 ++ rho2.
+  Proof.
+    intros rho1 rho2 F.
+    unfold descend.
+    autorewrite with list.
+    f_equal.
+    + now rewrite map_subst_identity_subst.
+    + rewrite map_map.
+      erewrite map_ext_in, map_id; auto.
+      intros ty I.
+      rewrite subst_shift_id; auto.
+      eapply Forall_forall; eauto.
+  Qed.
+
+  Lemma subst_subst_descend :
+    forall e rho1 rho2,
+      wf (length (rho1 ++ rho2)) e ->
+      Forall (wf 0) rho2 ->
+      subst rho1 (subst (descend (length rho1) rho2) e) =
+      subst (rho1 ++ rho2) e.
+  Proof.
+    intros e rho1 rho2 WF F.
+    rewrite subst_subst, subst_descend; auto.
+    - now rewrite descend_length, app_length in *.
+    - apply descend_wf with (s := (length rho1)) in F.
+      now rewrite Nat.add_0_r in *.
+  Qed.
+
+  Lemma subst_cons :
+    forall e v rho,
+      wf (S (length rho)) e ->
+      Forall (wf 0) rho ->
+      subst [v] (subst (descend 1 rho) e) =
+      subst (v :: rho) e.
+  Proof.
+    intros e v rho WF F.
+    apply subst_subst_descend with (rho1 := [v]); auto.
+  Qed.
+
   Module basis_util.
   End basis_util.
 End abt.
@@ -1142,8 +1273,12 @@ Module Type SYNTAX_BASIS.
 
   Parameter t : Type.
 
+  Parameter var : nat -> t.
+
   Parameter to_abt : t -> A.t.
   Parameter of_abt : A.t -> t.
+
+  Parameter var_to_abt : forall n, to_abt (var n) = A.var n.
 
   Parameter ws_to_abt : forall e, A.ws (to_abt e).
   Parameter of_to_abt : forall e, of_abt (to_abt e) = e.
@@ -1155,6 +1290,8 @@ Module Type SYNTAX_BASIS.
   Parameter subst : list t -> t -> t.
   Parameter subst_to_abt_comm : forall e rho,
       to_abt (subst rho e) = A.subst (map to_abt rho) (to_abt e).
+  Parameter map_shift_to_abt_comm : forall c d rho,
+      map to_abt (map (shift c d) rho) = map (A.shift c d) (map to_abt rho).
 
   Parameter wf : nat -> t -> Prop.
   Parameter wf_to_abt : forall e n, wf n e <-> A.wf n (to_abt e).
@@ -1165,6 +1302,18 @@ End SYNTAX_BASIS.
 
 Module abt_util (SB : SYNTAX_BASIS).
   Include SB.
+
+  Definition descend n rho :=
+    identity_subst n ++ map (shift 0 n) rho.
+
+  Lemma descend_to_abt_comm :
+    forall n rho,
+      map to_abt (descend n rho) = A.descend n (map to_abt rho).
+  Proof.
+    unfold descend.
+    intros n rho.
+    now rewrite map_app, identity_subst_to_abt_comm, map_shift_to_abt_comm.
+  Qed.
 
   Lemma wf_of_abt :
     forall a n,
@@ -1329,5 +1478,38 @@ Module abt_util (SB : SYNTAX_BASIS).
     rewrite shift_to_abt_comm.
     intros WF.
     now apply A.wf_shift_inv in WF.
+  Qed.
+
+  Lemma subst_cons :
+    forall e v rho,
+      wf (S (length rho)) e ->
+      Forall (wf 0) rho ->
+      subst [v] (subst (descend 1 rho) e) =
+      subst (v :: rho) e.
+  Proof.
+    intros e v rho WF F.
+    apply to_abt_inj.
+    rewrite !subst_to_abt_comm, descend_to_abt_comm.
+    simpl.
+    rewrite A.subst_cons; auto.
+    - now rewrite map_length, <- wf_to_abt.
+    - rewrite Forall_map.
+      eapply Forall_impl; [|eassumption].
+      intros.
+      now rewrite <- wf_to_abt.
+  Qed.
+
+  Lemma descend_1 :
+    forall rho,
+      descend 1 rho = var 0 :: map (shift 0 1) rho.
+  Proof.
+    intros rho.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite descend_to_abt_comm.
+    simpl.
+    rewrite var_to_abt.
+    rewrite map_shift_to_abt_comm.
+    now rewrite A.descend_1.
   Qed.
 End abt_util.

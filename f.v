@@ -140,11 +140,15 @@ Module type_basis.
   Lemma identity_subst_to_abt_comm :
     forall n, List.map to_abt (identity_subst n) = A.identity_subst n.
   Proof. A.basis_util.prove_identity_subst_to_abt_comm map_shift_to_abt_comm. Qed.
+
+  Definition var := var.
+  Arguments var /.
+  Lemma var_to_abt : forall n, to_abt (var n) = A.var n.
+  Proof. reflexivity. Qed.
 End type_basis.
 
 Module type.
    Include abt.abt_util type_basis.
-   Notation var := type_ast.var.
    Notation arrow := type_ast.arrow.
    Notation all := type_ast.all.
    Notation exist := type_ast.exist.
@@ -261,11 +265,15 @@ Module expr_basis.
   Lemma identity_subst_to_abt_comm :
     forall n, List.map to_abt (identity_subst n) = A.identity_subst n.
   Proof. A.basis_util.prove_identity_subst_to_abt_comm map_shift_to_abt_comm. Qed.
+
+  Definition var := var.
+  Arguments var /.
+  Lemma var_to_abt : forall n, to_abt (var n) = A.var n.
+  Proof. reflexivity. Qed.
 End expr_basis.
 
 Module expr.
   Include abt.abt_util expr_basis.
-  Notation var := expr_ast.var.
   Notation abs := expr_ast.abs.
   Notation app := expr_ast.app.
   Notation tyabs := expr_ast.tyabs.

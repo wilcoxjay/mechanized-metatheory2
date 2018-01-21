@@ -241,3 +241,38 @@ Ltac do_max_spec :=
       | [ |- context [ Init.Nat.max ?x ?y ] ] => 
         pose proof Nat.max_spec x y
       end.
+
+Section Forall3.
+  Variable A B C : Type.
+  Variable P : A -> B -> C -> Prop.
+
+  Inductive Forall3 : list A -> list B -> list C -> Prop :=
+  | Forall3_nil : Forall3 [] [] []
+  | Forall3_cons : forall a b c xs ys zs,
+      P a b c ->
+      Forall3 xs ys zs -> 
+      Forall3 (a :: xs) (b :: ys) (c :: zs).
+
+  Lemma Forall3_nth_error1 :
+    forall xs ys zs n x,
+    Forall3 xs ys zs ->
+    nth_error xs n = Some x ->
+    exists y z,
+      nth_error ys n = Some y /\
+      nth_error zs n = Some z /\
+      P x y z.
+  Admitted.
+End Forall3.
+
+Lemma map_inj :
+  forall A B (f : A -> B) l1 l2,
+    (forall a1 a2, f a1 = f a2 -> a1 = a2) ->
+    map f l1 = map f l2 ->
+    l1 = l2.
+Proof.
+  intros A B f l1 l2 Inj.
+  revert l1 l2.
+  induction l1; destruct l2; simpl; intros; try congruence.
+  inversion H.
+  f_equal; auto.
+Qed.
