@@ -316,4 +316,27 @@ Module step.
   Qed.
 
   Hint Resolve star_app2 star_app1 star_refl.
+
+  Lemma value :
+    forall v,
+      value.t v ->
+      forall e',
+        step.t v e' ->
+        False.
+  Proof.
+    induction 1; intros e' Step; inversion Step; subst.
+  Qed.
+
+  Lemma star_value :
+    forall v e',
+      value.t v ->
+      step.star v e' ->
+      e' = v.
+  Proof.
+    intros v e' Val Star.
+    apply clos_rtn1_rt in Star.
+    apply clos_rt_rt1n in Star.
+    inversion Star; subst; auto.
+    exfalso; eauto using value.
+  Qed.
 End step.

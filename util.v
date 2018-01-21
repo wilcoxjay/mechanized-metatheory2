@@ -12,6 +12,9 @@ Ltac break_match :=
   | [ H : context [ match ?X with _ => _ end ] |- _ ] => destruct X eqn:?
   end.
 
+Ltac invc H :=
+  inversion H; subst; clear H.
+
 Lemma nth_error_map :
   forall A B (f : A -> B) n l,
     nth_error (map f l) n =
@@ -30,7 +33,7 @@ Proof.
   intros A B f P l.
   split.
   - induction l; simpl; intuition.
-    inversion H; subst. constructor; auto.
+    invc H. constructor; auto.
   - induction 1; simpl; constructor; auto.
 Qed.
 
@@ -46,7 +49,7 @@ Proof.
   intros A B P l1 l2 x y F.
   revert x y.
   induction F as [|a b l1' l2' HR F']; intros x y NE; destruct x; simpl in *; try discriminate.
-  - inversion NE. subst. eauto.
+  - invc NE. eauto.
   - auto.
 Qed.
 
@@ -62,7 +65,7 @@ Proof.
   intros A B P l1 l2 x y F.
   revert x y.
   induction F as [|a b l1' l2' HR F']; intros x y NE; destruct x; simpl in *; try discriminate.
-  - inversion NE. subst. eauto.
+  - invc NE. eauto.
   - auto.
 Qed.
 
@@ -115,7 +118,7 @@ Lemma nth_error_app1 :
 .
 Proof.
   induction l1; intros l2 x H; simpl.
-  - inversion H.
+  - invc H.
   - destruct x.
     + reflexivity.
     + simpl in *.
@@ -142,7 +145,7 @@ Lemma Forall_nth :
 Proof.
   intros A P l n x F NE.
   revert n x NE.
-  induction F; simpl; intros n y NE; destruct n; inversion NE; subst; eauto.
+  induction F; simpl; intros n y NE; destruct n; invc NE; eauto.
 Qed.
 
 Lemma Forall2_length :
@@ -181,7 +184,7 @@ Proof.
   intros A B A' B' P f g l1 l2.
   split.
   - revert l2.
-    induction l1; destruct l2; simpl; intros F; inversion F; subst; constructor; auto.
+    induction l1; destruct l2; simpl; intros F; invc F; constructor; auto.
   - induction 1; simpl; constructor; auto.
 Qed.
 
@@ -209,7 +212,7 @@ Lemma Forall_app :
 Proof.
   induction l1; simpl; intros l2; intuition;
     try match goal with
-    | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
+    | [ H : Forall _ (_ :: _) |- _ ] => invc H
     end; firstorder.
 Qed.
 
@@ -261,8 +264,53 @@ Section Forall3.
       nth_error ys n = Some y /\
       nth_error zs n = Some z /\
       P x y z.
-  Admitted.
+  Proof.
+    intros xs ys zs n x F. revert n x.
+    induction F; intros n x NE; destruct n; simpl in *; try discriminate.
+    - invc NE. eauto.
+    - eauto.
+  Qed.
+
+  Lemma Forall3_nth_error2 :
+    forall xs ys zs n y,
+    Forall3 xs ys zs ->
+    nth_error ys n = Some y ->
+    exists x z,
+      nth_error xs n = Some x /\
+      nth_error zs n = Some z /\
+      P x y z.
+  Proof.
+    intros xs ys zs n x F. revert n x.
+    induction F; intros n x NE; destruct n; simpl in *; try discriminate.
+    - invc NE. eauto.
+    - eauto.
+  Qed.
+
+  Lemma Forall3_nth_error3 :
+    forall xs ys zs n z,
+    Forall3 xs ys zs ->
+    nth_error zs n = Some z ->
+    exists x y,
+      nth_error xs n = Some x /\
+      nth_error ys n = Some y /\
+      P x y z.
+  Proof.
+    intros xs ys zs n x F. revert n x.
+    induction F; intros n x NE; destruct n; simpl in *; try discriminate.
+    - invc NE. eauto.
+    - eauto.
+  Qed.
+
+  Lemma Forall3_length :
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      length xs = length ys /\
+      length xs = length zs.
+  Proof.
+    induction 1; simpl; intuition.
+  Qed.
 End Forall3.
+Hint Constructors Forall3.
 
 Lemma map_inj :
   forall A B (f : A -> B) l1 l2,
@@ -273,6 +321,6 @@ Proof.
   intros A B f l1 l2 Inj.
   revert l1 l2.
   induction l1; destruct l2; simpl; intros; try congruence.
-  inversion H.
+  invc H.
   f_equal; auto.
 Qed.
