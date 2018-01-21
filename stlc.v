@@ -61,28 +61,6 @@ Module expr_basis.
     | _ => var 0 (* bogus *)
     end.
 
-  Lemma ws_to_abt : forall e, A.ws (to_abt e).
-  Proof. induction e; simpl; intuition. Qed.
-
-  Lemma of_to_abt : forall e, of_abt (to_abt e) = e.
-  Proof. induction e; simpl; f_equal; auto. Qed.
-
-  Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
-  Proof.
-    induction a using A.rect'
-    with (Pb := fun b => forall v,
-                    A.ws_binder v b ->
-                    match b with
-                    | A.bind _ a => to_abt (of_abt a) = a
-                    end) ; simpl; intros; f_equal; intuition;
-      fold A.ws_binders in *.
-    - repeat break_match; subst; simpl in *; intuition;
-        repeat match goal with
-               | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
-               end; simpl in *; try omega;
-      repeat f_equal; eauto.
-  Qed.
-
   Fixpoint shift c d (e : t) : t :=
     match e with
     | var x => var (if x <? c then x else x + d)
@@ -90,9 +68,6 @@ Module expr_basis.
     | app e1 e2 => app (shift c d e1) (shift c d e2)
     | tt => tt
     end.
-
-  Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
-  Proof. induction e; simpl; intros c d; auto; repeat f_equal; auto. Qed.
 
   Fixpoint subst rho e :=
     match e with
@@ -105,25 +80,6 @@ Module expr_basis.
     | tt => tt
     end.
 
-
-  Lemma map_shift_to_abt_comm :
-    forall c d rho, map to_abt (map (shift c d) rho) = map (A.shift c d) (map to_abt rho).
-  Proof.
-    intros.
-    rewrite !map_map.
-    now erewrite map_ext by (intros; apply shift_to_abt_comm).
-  Qed.
-
-  Lemma subst_to_abt_comm : forall e rho,
-      to_abt (subst rho e) = A.subst (map to_abt rho) (to_abt e).
-  Proof.
-    unfold t.
-    induction e; simpl; intros rho; rewrite ?A.descend_0, ?A.descend_1; repeat f_equal; auto.
-    - rewrite nth_error_map. break_match; auto.
-    - rewrite IHe. simpl.
-      now rewrite map_shift_to_abt_comm.
-  Qed.
-
   Fixpoint wf n e :=
     match e with
     | var x => x < n
@@ -132,22 +88,38 @@ Module expr_basis.
     | tt => True
     end.
 
-  Lemma wf_to_abt : forall e n, wf n e <-> A.wf n (to_abt e).
-  Proof. induction e; simpl; firstorder. Qed.
-
   Fixpoint identity_subst (n : nat) : list t :=
     match n with
     | 0 => []
     | S n => var 0 :: map (shift 0 1) (identity_subst n)
     end.
 
+  Lemma ws_to_abt : forall e, A.ws (to_abt e).
+  Proof. A.basis_util.prove_ws_to_abt. Qed.
+
+  Lemma of_to_abt : forall e, of_abt (to_abt e) = e.
+  Proof. A.basis_util.prove_of_to_abt. Qed.
+
+  Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
+  Proof. A.basis_util.prove_to_of_abt to_abt of_abt. Qed.
+
+  Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
+  Proof. A.basis_util.prove_shift_to_abt_comm. Qed.
+
+  Lemma map_shift_to_abt_comm :
+    forall c d rho, map to_abt (map (shift c d) rho) = map (A.shift c d) (map to_abt rho).
+  Proof. A.basis_util.prove_map_shift_to_abt_comm shift_to_abt_comm. Qed.
+
+  Lemma subst_to_abt_comm : forall e rho,
+      to_abt (subst rho e) = A.subst (map to_abt rho) (to_abt e).
+  Proof. A.basis_util.prove_subst_to_abt_comm t map_shift_to_abt_comm. Qed.
+
+  Lemma wf_to_abt : forall e n, wf n e <-> A.wf n (to_abt e).
+  Proof. A.basis_util.prove_wf_to_abt. Qed.
+
   Lemma identity_subst_to_abt_comm :
-    forall n,
-      List.map to_abt (identity_subst n) = A.identity_subst n.
-  Proof.
-    induction n; simpl; f_equal; auto.
-    now rewrite map_shift_to_abt_comm, IHn.
-  Qed.
+    forall n, List.map to_abt (identity_subst n) = A.identity_subst n.
+  Proof. A.basis_util.prove_identity_subst_to_abt_comm map_shift_to_abt_comm. Qed.
 End expr_basis.
 
 Module expr.

@@ -220,6 +220,55 @@ Module Type ABT.
 
   Parameter descend_0 : forall rho, descend 0 rho = rho.
   Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
+
+  Module basis_util.
+    Ltac prove_ws_to_abt :=
+      intros e; induction e; simpl; intuition.
+    
+    Ltac prove_of_to_abt :=
+      intros e; induction e; simpl; f_equal; auto.
+    
+    Ltac prove_to_of_abt to_abt of_abt :=
+      intros a;
+      induction a using rect'
+      with (Pb :=
+              (fun b => forall v, ws_binder v b ->
+                match b with
+                | bind _ a => to_abt (of_abt a) = a
+                end)) ; simpl; intros; f_equal; intuition;
+        fold ws_binders in *;
+        repeat break_match; subst; simpl in *; intuition;
+        repeat match goal with
+               | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
+               end; simpl in *; try omega;
+          repeat f_equal; eauto.
+    
+    Ltac prove_shift_to_abt_comm :=
+      intros e; induction e; simpl; intros c d; auto; repeat f_equal; auto.
+    
+    Ltac prove_map_shift_to_abt_comm stac :=
+      intros; rewrite !map_map; now erewrite map_ext by (intros; apply stac).
+
+    Ltac prove_subst_to_abt_comm t mstac :=
+      unfold t;
+      intros e; induction e; simpl; intros rho; rewrite ?descend_0, ?descend_1;
+      repeat match goal with
+      | [ IH : forall _, _ = _ |- _ ] => rewrite IH; clear IH
+      end;
+      simpl; repeat f_equal;
+      auto using mstac;
+      try (rewrite nth_error_map; break_match; auto).
+
+    Ltac prove_wf_to_abt :=
+      intros e; induction e; simpl; firstorder.
+
+    Ltac prove_identity_subst_to_abt_comm mstac :=
+      intros n; induction n; simpl; f_equal; auto;
+      now match goal with
+          | [ H : _ = _ |- _ ] => rewrite mstac, H
+          end.
+
+  End basis_util.
 End ABT.
 
 Module abt (O : OPERATOR) : ABT with Module O := O.
@@ -1083,6 +1132,9 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
       auto using ws_descend.
     - break_match; intuition.
   Qed.
+
+  Module basis_util.
+  End basis_util.
 End abt.
 
 Module Type SYNTAX_BASIS.
