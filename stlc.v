@@ -340,3 +340,54 @@ Module step.
     exfalso; eauto using value.
   Qed.
 End step.
+
+Module context.
+  Inductive t :=
+  | hole
+  | abs : t -> t
+  | app1 : t -> expr.t -> t
+  | app2 : expr.t -> t -> t
+  .
+
+  Fixpoint plug (C : t) (e : expr.t) : expr.t :=
+    match C with
+    | hole => e
+    | abs C' => expr.abs (plug C' e)
+    | app1 C1 e2 => expr.app (plug C1 e) e2
+    | app2 e1 C2 => expr.app e1 (plug C2 e)
+    end.
+End context.
+
+Module context_has_type.
+  Inductive t : list type.t -> context.t -> list type.t -> type.t -> type.t -> Prop :=
+  | hole : forall G ty, t G context.hole G ty ty
+  | abs : forall G' C G ty ty1' ty2',
+      t (ty1' :: G') C (ty1' :: G) ty ty2' ->
+      t G' (context.abs C) (ty1' :: G) ty (type.arrow ty1' ty2')
+  | app1 : forall G' C G ty ty1' ty2' e,
+      t G' C G ty (type.arrow ty1' ty2') ->
+      has_type.t G' e ty1' ->
+      t G' (context.app1 C e) G ty ty2'
+  | app2 : forall G' C G ty ty1' ty2' e,
+      has_type.t G' e (type.arrow ty1' ty2') ->
+      t G' C G ty ty1' ->
+      t G' (context.app2 e C) G ty ty2'
+  .
+
+  Theorem plug :
+    forall G' C G ty ty',
+      t G' C G ty ty' ->
+      forall e,
+        has_type.t G e ty ->
+        has_type.t G' (context.plug C e) ty'.
+  Proof.
+    induction 1; intros e0 HT0; cbn [context.plug].
+    -  assumption.
+    - apply IHt in HT0.
+      econstructor; eauto.
+    - apply IHt in HT0.
+       econstructor; eauto.
+    - apply IHt in HT0.
+       econstructor; eauto.
+  Qed.
+End context_has_type.
