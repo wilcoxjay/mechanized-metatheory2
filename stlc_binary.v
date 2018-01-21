@@ -140,7 +140,8 @@ Module has_sem_type.
       Forall3 V G vs1 vs2 ->
       E ty (expr.subst vs1 e1) (expr.subst vs2 e2).
 
-  Lemma var : forall G x ty,
+  Lemma var :
+    forall G x ty,
       nth_error G x = Some ty ->
       t G (expr.var x) (expr.var x) ty.
   Proof.
@@ -156,7 +157,8 @@ Module has_sem_type.
     now rewrite NE1, NE2.
   Qed.
 
-  Lemma tt : forall G,
+  Lemma tt :
+    forall G,
       t G expr.tt expr.tt type.unit.
   Proof.
     unfold t.
