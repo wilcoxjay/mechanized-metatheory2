@@ -132,46 +132,89 @@ Proof.
   eapply E_star1; [|eapply E_star2]; eauto.
 Qed.
 
-Theorem fundamental :
-  forall G e ty,
-    has_type.t G e ty ->
+Module has_sem_type.
+  Definition t G e1 e2 ty :=
+    expr.wf (length G) e1 /\
+    expr.wf (length G) e2 /\
     forall vs1 vs2,
       Forall3 V G vs1 vs2 ->
-      E ty (expr.subst vs1 e) (expr.subst vs2 e).
-Proof.
-  induction 1; intros vs1 vs2 F.
-  - apply V_E.
-    destruct (Forall3_nth_error1 _ F H) as [v1 [v2 [NE1 [NE2 V12]]]].
-    simpl.
+      E ty (expr.subst vs1 e1) (expr.subst vs2 e2).
+
+  Lemma var : forall G x ty,
+      nth_error G x = Some ty ->
+      t G (expr.var x) (expr.var x) ty.
+  Proof.
+    unfold t.
+    intros G x ty NE.
+    do_nth_error_Some.
+    split; [apply H; congruence|].
+    split; [apply H; congruence|].
+    intros vs1 vs2 F.
+    apply V_E.
+    destruct (Forall3_nth_error1 _ F NE) as [v1 [v2 [NE1 [NE2 V12]]]].
+    cbn.
     now rewrite NE1, NE2.
-  - apply V_E.
-    simpl.
+  Qed.
+
+  Lemma tt : forall G,
+      t G expr.tt expr.tt type.unit.
+  Proof.
+    unfold t.
+    intros G.
+    split; [exact I|].
+    split; [exact I|].
+    intros vs1 vs2 F.
+    apply V_E.
+    cbn.
     intuition.
-  - apply V_E.
+  Qed.
+
+  Lemma abs :
+    forall G e1 e2 ty1 ty2,
+      t (ty1 :: G) e1 e2 ty2 ->
+      t G (expr.abs e1) (expr.abs e2) (type.arrow ty1 ty2).
+  Proof.
+    unfold t.
+    intros G e1 e2 ty1 ty2 [WF1 [WF2 HT]].
+    split; [now auto|].
+    split; [now auto|].
+    intros vs1 vs2 F.
+    apply V_E.
     cbn [V].
-    assert (expr.wf (S (length G)) e) as WFe
-        by (now apply has_type.wf in H; simpl in * ).
-    pose proof F as F0.
-    apply Forall3_length in F0.
-    destruct F0 as [EGvs1 EGvs2].
-    split; [|split].
-    + apply expr.wf_subst; firstorder using V_list_closed.
-      simpl. now rewrite EGvs1 in *.
-    + apply expr.wf_subst; firstorder using V_list_closed.
-      simpl. now rewrite EGvs2 in *.
-    + exists (expr.subst (expr.descend 1 vs1) e), (expr.subst (expr.descend 1 vs2) e).
-      split; [now rewrite expr.descend_1|].
-      split; [now rewrite expr.descend_1|].
-      intros v1 v2 V12.
-      rewrite !expr.subst_cons;
-        firstorder using V_list_closed.
-      now rewrite EGvs2 in *.
-      now rewrite EGvs1 in *.
-  - cbn [expr.subst].
-    specialize (IHt1 vs1 vs2 F).
-    specialize (IHt2 vs1 vs2 F).
-    destruct IHt1 as [v11 [v12 [Star11 [Star12 [Val11 [Val12 V1]]]]]].
-    destruct IHt2 as [v21 [v22 [Star21 [Star22 [Val21 [Val22 V2]]]]]].
+    destruct (Forall3_length F) as [EG1 EG2].
+    cbn [length] in *.
+    split; [apply expr.wf_subst;
+            [now rewrite EG1 in WF1| now firstorder using V_list_closed]|].
+    split; [apply expr.wf_subst;
+            [now rewrite EG2 in WF2| now firstorder using V_list_closed]|].
+    exists (expr.subst (expr.descend 1 vs1) e1), (expr.subst (expr.descend 1 vs2) e2).
+    split; [now rewrite expr.descend_1|].
+    split; [now rewrite expr.descend_1|].
+    intros v1 v2 V12.
+    rewrite !expr.subst_cons;
+      firstorder using V_list_closed.
+    now rewrite EG2 in *.
+    now rewrite EG1 in *.
+  Qed.
+
+  Lemma app :
+    forall G e11 e12 e21 e22 ty1 ty2,
+      t G e11 e21 (type.arrow ty1 ty2) ->
+      t G e12 e22 ty1 ->
+      t G (expr.app e11 e12) (expr.app e21 e22) ty2.
+  Proof.
+    intros G e11 e12 e21 e22 ty1 ty2.
+    intros [WF11 [WF12 HT1]].
+    intros [WF21 [WF22 HT2]].
+    split; [now cbn; auto|].
+    split; [now cbn; auto|].
+    intros vs1 vs2 F.
+
+    cbn [expr.subst].
+    specialize (HT1 vs1 vs2 F).
+    specialize (HT2 vs1 vs2 F).
+    destruct HT1 as [v11 [v12 [Star11 [Star12 [Val11 [Val12 V1]]]]]].
+    destruct HT2 as [v21 [v22 [Star21 [Star22 [Val21 [Val22 V2]]]]]].
     destruct V1 as [WF1 [WF2 [body1 [body2 [? [? H1]]]]]].
     subst v11 v12.
     eapply E_star; [| |now eauto].
@@ -187,6 +230,20 @@ Proof.
     eapply step.star_trans.
     eapply step.star_app2. now eauto.
     eauto using step.step_l, step.beta.
+  Qed.
+End has_sem_type.
+
+Theorem fundamental :
+  forall G e ty,
+    has_type.t G e ty ->
+    has_sem_type.t G e e ty.
+Proof.
+  induction 1.
+  - now apply has_sem_type.var.
+  - apply has_sem_type.tt.
+  - apply has_type.wf in H.
+    apply has_sem_type.abs; auto.
+  - eapply has_sem_type.app; eauto.
 Qed.
 Print Assumptions fundamental.
 
