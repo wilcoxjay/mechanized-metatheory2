@@ -14,7 +14,7 @@ End terminating.
 
 Fixpoint V ty e1 e2 :=
   match ty with
-    | type.unit => e1 = expr.tt /\ e2 = expr.tt
+    | type.bool => (e1 = expr.tt /\ e2 = expr.tt) \/ (e1 = expr.ff /\ e2 = expr.ff)
     | type.arrow ty1 ty2 =>
       expr.wf 0 e1 /\
       expr.wf 0 e2 /\
@@ -99,6 +99,17 @@ Proof.
   all: eapply step.step_l; eauto.
 Qed.
 
+Lemma E_step :
+  forall ty e1 e1' e2 e2',
+    step.t e1 e1' ->
+    step.t e2 e2' ->
+    E ty e1' e2' ->
+    E ty e1 e2.
+Proof.
+  intros ty e1 e1' e2 e2' S1 S2 HE.
+  eapply E_step1; [|eapply E_step2]; eauto.
+Qed.
+
 Lemma E_star1 :
   forall ty e1 e1' e2,
     step.star e1 e1' ->
@@ -159,7 +170,21 @@ Module has_sem_type.
 
   Lemma tt :
     forall G,
-      t G expr.tt expr.tt type.unit.
+      t G expr.tt expr.tt type.bool.
+  Proof.
+    unfold t.
+    intros G.
+    split; [exact I|].
+    split; [exact I|].
+    intros vs1 vs2 F.
+    apply V_E.
+    cbn.
+    intuition.
+  Qed.
+
+  Lemma ff :
+    forall G,
+      t G expr.ff expr.ff type.bool.
   Proof.
     unfold t.
     intros G.
@@ -233,6 +258,29 @@ Module has_sem_type.
     eapply step.star_app2. now eauto.
     eauto using step.step_l, step.beta.
   Qed.
+
+  Lemma If :
+    forall G e11 e12 e21 e22 e31 e32 ty,
+      t G e11 e12 type.bool ->
+      t G e21 e22 ty -> 
+      t G e31 e32 ty ->
+      t G (expr.If e11 e21 e31) (expr.If e12 e22 e32) ty.
+  Proof.
+    intros G e11 e12 e21 e22 e31 e32 ty.
+    intros [WF11 [WF12 HT1]].
+    intros [WF21 [WF22 HT2]].
+    intros [WF31 [WF32 HT3]].
+    split; [now cbn; auto|].
+    split; [now cbn; auto|].
+    intros vs1 vs2 F.
+
+    cbn [expr.subst].
+    specialize (HT1 vs1 vs2 F).
+    destruct HT1 as [v11 [v12 [Star11 [Star12 [Val11 [Val12 V1]]]]]].
+    eapply E_star; [apply step.star_If|apply step.star_If|]; eauto.
+    destruct V1 as [[? ?]|[? ?]]; subst;
+      (eapply E_step; [constructor|constructor|]); auto.
+  Qed.
 End has_sem_type.
 
 Theorem fundamental :
@@ -243,9 +291,11 @@ Proof.
   induction 1.
   - now apply has_sem_type.var.
   - apply has_sem_type.tt.
+  - apply has_sem_type.ff.
   - apply has_type.wf in H.
     apply has_sem_type.abs; auto.
   - eapply has_sem_type.app; eauto.
+  - apply has_sem_type.If; auto.
 Qed.
 Print Assumptions fundamental.
 
@@ -283,7 +333,3 @@ Proof.
   destruct (fundamental_closed HT) as [v1 [v2 [Star1 [Star2 [Val1 [Val2 V12]]]]]].
   eauto.
 Qed.
-
-
-
-

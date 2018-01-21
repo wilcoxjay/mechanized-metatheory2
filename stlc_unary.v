@@ -11,7 +11,7 @@ End terminating.
 
 Fixpoint V ty e :=
   match ty with
-    | type.unit => e = expr.tt
+    | type.bool => e = expr.tt \/ e = expr.ff
     | type.arrow ty1 ty2 =>
       expr.wf 0 e /\
       exists body,
@@ -30,7 +30,7 @@ Lemma V_value :
 Proof.
   intros ty v HV.
   destruct ty; cbn [V] in HV.
-  - subst. constructor.
+  - intuition; subst; constructor.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
 Qed.
@@ -51,8 +51,7 @@ Lemma V_closed :
     V ty e ->
     expr.wf 0 e.
 Proof.
-  induction ty; simpl; intuition.
-  subst. simpl. auto.
+  induction ty; simpl; intuition; subst; simpl; auto.
 Qed.
 
 Lemma V_list_closed :
@@ -104,7 +103,11 @@ Proof.
     rewrite Hvs.
     auto using V_E.
   - apply V_E.
-    reflexivity.
+    simpl.
+    intuition.
+  - apply V_E.
+    simpl.
+    intuition.
   - apply V_E.
     cbn [V].
     assert (expr.wf (S (length vs)) e) as WFe
@@ -130,6 +133,13 @@ Proof.
     eapply step.star_trans.
     eapply step.star_app2. now eauto.
     eauto using step.step_l, step.beta.
+  - cbn [expr.subst].
+    specialize (IHt1 vs F).
+    destruct IHt1 as [v1 [S1 [Val1 V1]]].
+    eapply E_star.
+    eapply step.star_If; now eauto.
+    destruct V1 as [|]; subst v1;
+      (eapply E_step; [constructor|]); auto.
 Qed.
 Print Assumptions fundamental.
 

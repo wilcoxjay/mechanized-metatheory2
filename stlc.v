@@ -5,6 +5,8 @@ Module exprop.
   | abs
   | app
   | tt
+  | ff
+  | If
   .
   Definition t := t'.
 
@@ -13,6 +15,8 @@ Module exprop.
     | abs => [1]
     | app => [0; 0]
     | tt => []
+    | ff => []
+    | If => [0; 0; 0]
     end.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
@@ -22,7 +26,7 @@ End exprop.
 
 Module type.
   Inductive t :=
-  | unit
+  | bool
   | arrow : t -> t -> t
   .
 End type.
@@ -35,6 +39,8 @@ Module expr_ast.
   | abs : t -> t
   | app : t -> t -> t
   | tt : t
+  | ff : t
+  | If : t -> t -> t -> t
   .
 End expr_ast.
 
@@ -50,6 +56,10 @@ Module expr_basis.
     | abs e' => A.op exprop.abs [A.bind 1 (to_abt e')]
     | app e1 e2 => A.op exprop.app [A.bind 0 (to_abt e1); A.bind 0 (to_abt e2)]
     | tt => A.op exprop.tt []
+    | ff => A.op exprop.ff []
+    | If e1 e2 e3 => A.op exprop.If [A.bind 0 (to_abt e1);
+                                            A.bind 0 (to_abt e2);
+                                            A.bind 0 (to_abt e3)]
     end.
 
   Fixpoint of_abt (a : A.t) : t :=
@@ -58,6 +68,9 @@ Module expr_basis.
     | A.op exprop.abs [A.bind 1 a'] => abs (of_abt a')
     | A.op exprop.app [A.bind 0 a1; A.bind 0 a2] => app (of_abt a1) (of_abt a2)
     | A.op exprop.tt [] => tt
+    | A.op exprop.ff [] => ff
+    | A.op exprop.If [A.bind 0 a1; A.bind 0 a2; A.bind 0 a3] =>
+      If (of_abt a1) (of_abt a2) (of_abt a3)
     | _ => var 0 (* bogus *)
     end.
 
@@ -67,6 +80,8 @@ Module expr_basis.
     | abs e' => abs (shift (S c) d e')
     | app e1 e2 => app (shift c d e1) (shift c d e2)
     | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (shift c d e1) (shift c d e2) (shift c d e3)
     end.
 
   Fixpoint subst rho e :=
@@ -78,6 +93,8 @@ Module expr_basis.
     | abs e' => abs (subst (var 0 :: map (shift 0 1) rho) e')
     | app e1 e2 => app (subst rho e1) (subst rho e2)
     | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (subst rho e1) (subst rho e2) (subst rho e3)
     end.
 
   Fixpoint wf n e :=
@@ -86,6 +103,8 @@ Module expr_basis.
     | abs e' => wf (S n) e'
     | app e1 e2 => wf n e1 /\ wf n e2
     | tt => True
+    | ff => True
+    | If e1 e2 e3 => wf n e1 /\ wf n e2 /\ wf n e3
     end.
 
   Fixpoint identity_subst (n : nat) : list t :=
@@ -132,6 +151,8 @@ Module expr.
   Notation abs := expr_ast.abs.
   Notation app := expr_ast.app.
   Notation tt := expr_ast.tt.
+  Notation ff := expr_ast.ff.
+  Notation If := expr_ast.If.
 End expr.
 
 
@@ -141,7 +162,9 @@ Module has_type.
       List.nth_error G x = Some ty ->
       t G (expr.var x) ty
   | tt : forall G,
-      t G expr.tt type.unit
+      t G expr.tt type.bool
+  | ff : forall G,
+      t G expr.ff type.bool
   | abs : forall G e ty1 ty2,
       t (ty1 :: G) e ty2 ->
       t G (expr.abs e) (type.arrow ty1 ty2)
@@ -149,6 +172,11 @@ Module has_type.
       t G e1 (type.arrow ty1 ty2) ->
       t G e2 ty1 ->
       t G (expr.app e1 e2) ty2
+  | If : forall G e1 e2 e3 ty,
+      t G e1 type.bool ->
+      t G e2 ty -> 
+      t G e3 ty ->
+      t G (expr.If e1 e2 e3) ty
   .
 
   Lemma wf :
@@ -174,6 +202,7 @@ Module has_type.
       + rewrite !nth_error_app2 in * by omega.
         now do_app2_minus.
     - constructor.
+    - constructor.
     - cbn [expr.shift].
       constructor.
       change (ty1 :: G1 ++ G' ++ G2) with ((ty1 :: G1) ++ G' ++ G2).
@@ -181,6 +210,10 @@ Module has_type.
     - simpl. econstructor.
       + now apply IHt1.
       + now apply IHt2.
+    - simpl. econstructor.
+      + now apply IHt1.
+      + now apply IHt2.
+      + now apply IHt3.
   Qed.
 
   Lemma shift' :
@@ -215,6 +248,7 @@ Module has_type.
       now rewrite Hz.
     - constructor.
     - constructor.
+    - constructor.
       apply IHt.
       constructor.
       + now constructor.
@@ -227,6 +261,10 @@ Module has_type.
     - econstructor.
       + now apply IHt1.
       + now apply IHt2.
+    - econstructor.
+      + now apply IHt1.
+      + now apply IHt2.
+      + now apply IHt3.
   Qed.
 End has_type.
 
@@ -237,21 +275,29 @@ End ctx.
 Module value.
   Inductive t : expr.t -> Prop :=
   | tt : t expr.tt
+  | ff : t expr.ff
   | abs : forall e, t (expr.abs e)
   .
 End value.
 
 Module step.
   Inductive t : expr.t -> expr.t -> Prop :=
+  | beta : forall e1 e2,
+      t (expr.app (expr.abs e1) e2)
+        (expr.subst [e2] e1)
   | app1  : forall e1 e1' e2,
       t e1 e1' ->
       t (expr.app e1 e2) (expr.app e1' e2)
   | app2  : forall e1 e2 e2',
       t e2 e2' ->
       t (expr.app e1 e2) (expr.app e1 e2')
-  | beta : forall e1 e2,
-      t (expr.app (expr.abs e1) e2)
-        (expr.subst [e2] e1)
+  | IfT : forall e2 e3,
+      t (expr.If expr.tt e2 e3) e2
+  | IfF : forall e2 e3,
+      t (expr.If expr.ff e2 e3) e3
+  | If : forall e1 e1' e2 e3,
+      t e1 e1' ->
+      t (expr.If e1 e2 e3) (expr.If e1' e2 e3)
   .
   Hint Constructors t.
 
@@ -290,6 +336,19 @@ Module step.
     intros e1 e2 e2' Star.
     revert e1.
     induction Star; intros e1.
+    - constructor.
+    - econstructor; [|apply IHStar].
+      eauto.
+  Qed.
+
+  Lemma star_If :
+    forall e1 e1' e2 e3,
+      star e1 e1' ->
+      star (expr.If e1 e2 e3) (expr.If e1' e2 e3).
+  Proof.
+    intros e1 e1' e2 e3 Star.
+    revert e2 e3.
+    induction Star; intros e2 e3.
     - constructor.
     - econstructor; [|apply IHStar].
       eauto.
