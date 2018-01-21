@@ -37,7 +37,7 @@ Proof.
   - induction 1; simpl; constructor; auto.
 Qed.
 
-Lemma Forall2_nth_error_l :
+Lemma Forall2_nth_error2 :
   forall {A B} {P : A -> B -> Prop} {l1 l2 x y},
     List.Forall2 P l1 l2 ->
     List.nth_error l2 x = Some y ->
@@ -53,7 +53,7 @@ Proof.
   - auto.
 Qed.
 
-Lemma Forall2_nth_error_r :
+Lemma Forall2_nth_error1 :
   forall {A B} {P : A -> B -> Prop} {l1 l2 x y},
     List.Forall2 P l1 l2 ->
     List.nth_error l1 x = Some y ->

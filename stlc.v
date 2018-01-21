@@ -242,7 +242,7 @@ Module has_type.
         t G' (expr.subst rho e) ty.
   Proof.
     induction 1; intros G' rho F; cbn [expr.subst].
-    - destruct (Forall2_nth_error_l F H) as [z [Hz Ht]].
+    - destruct (Forall2_nth_error2 F H) as [z [Hz Ht]].
       unfold expr.t in *.
       simpl.
       now rewrite Hz.

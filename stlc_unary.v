@@ -62,7 +62,7 @@ Proof.
   intros G vs F.
   apply Forall_from_nth.
   intros n e NEe.
-  destruct (Forall2_nth_error_l F NEe) as [ty [NEty Ve]].
+  destruct (Forall2_nth_error2 F NEe) as [ty [NEty Ve]].
   eauto using V_closed.
 Qed.
 
@@ -98,7 +98,7 @@ Theorem fundamental :
 Proof.
   induction 1; intros vs F.
   - cbn [expr.subst].
-    destruct (Forall2_nth_error_r F H) as [v [Hvs HV]].
+    destruct (Forall2_nth_error1 F H) as [v [Hvs HV]].
     simpl.
     rewrite Hvs.
     auto using V_E.

@@ -253,7 +253,7 @@ Lemma V_ext :
 Proof.
   induction ty; simpl; intros d1 d2 F e.
   - break_match.
-    + destruct (Forall2_nth_error_r F Heqo) as [t' [NE' H]].
+    + destruct (Forall2_nth_error1 F Heqo) as [t' [NE' H]].
       unfold semtype.t.
       now rewrite NE'.
     + pose proof Forall2_length F.
@@ -425,7 +425,7 @@ Proof.
   intros n G e ty GWF HT.
   induction HT; intros d g ? WFd WFg; subst n.
   - simpl. apply V_E; auto.
-    destruct (Forall2_nth_error_r WFg H) as [v [Hv HV]].
+    destruct (Forall2_nth_error1 WFg H) as [v [Hv HV]].
     unfold expr.t in *.
     now rewrite Hv.
   - apply V_E; auto.
@@ -441,7 +441,7 @@ Proof.
         rewrite Forall_map.
         apply Forall_from_nth.
         intros n x Hnx.
-        destruct (Forall2_nth_error_l WFg Hnx) as [y [Hny Vxy]].
+        destruct (Forall2_nth_error2 WFg Hnx) as [y [Hny Vxy]].
         apply V_wf in Vxy; auto.
         now apply expr.wf_shift with (c := 0) (d := 1).
     + eexists. split; [reflexivity|].
@@ -457,7 +457,7 @@ Proof.
         rewrite expr.subst_shift_singleton.
         reflexivity.
         destruct (In_nth_error _ _ I) as [n NE].
-        destruct (Forall2_nth_error_l WFg NE) as [ty' [NE' V']].
+        destruct (Forall2_nth_error2 WFg NE) as [ty' [NE' V']].
         eapply V_wf; eauto.
       * simpl. rewrite map_length.
         apply has_type.t_expr_wf in HT.
@@ -468,7 +468,7 @@ Proof.
         apply Forall_from_nth.
         intros n x NEx.
         apply expr.wf_shift with (d := 1).
-        destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vxy]].
+        destruct (Forall2_nth_error2 WFg NEx) as [y [NEy Vxy]].
         eauto using V_wf.
   - cbn [expr.subst].
     specialize (IHHT1 GWF d g eq_refl WFd WFg).
@@ -495,7 +495,7 @@ Proof.
         now erewrite <- Forall2_length by eauto.
       * apply Forall_from_nth.
         intros n x NEx.
-        destruct (Forall2_nth_error_l WFg NEx) as [y [NEy Vy]].
+        destruct (Forall2_nth_error2 WFg NEx) as [y [NEy Vy]].
         eapply V_wf; eauto.
     + eexists. split; [reflexivity|].
       intros S SWF.
@@ -592,7 +592,7 @@ Proof.
       intros e I.
       apply In_nth_error in I.
       destruct I as [n NE].
-      eapply (Forall2_nth_error_l WFg) in NE.
+      eapply (Forall2_nth_error2 WFg) in NE.
       destruct NE as [ty [_ Ve]].
       apply V_wf in Ve; auto.
     }
