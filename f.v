@@ -375,6 +375,9 @@ End value.
 
 Module step.
   Inductive t : expr.t -> expr.t -> Prop :=
+  | beta : forall body v,
+      value.t v ->
+      t (expr.app (expr.abs body) v) (expr.subst [v] body)
   | app1 : forall e1 e1' e2,
       t e1 e1' ->
       t (expr.app e1 e2) (expr.app e1' e2)
@@ -382,24 +385,21 @@ Module step.
       value.t e1 ->
       t e2 e2' ->
       t (expr.app e1 e2) (expr.app e1 e2')
-  | beta : forall body v,
-      value.t v ->
-      t (expr.app (expr.abs body) v) (expr.subst [v] body)
-  | tyapp : forall e e' ,
-      t e e' ->
-      t (expr.tyapp e) (expr.tyapp e')
   | tybeta : forall body,
       t (expr.tyapp (expr.tyabs body))
         body
+  | tyapp : forall e e' ,
+      t e e' ->
+      t (expr.tyapp e) (expr.tyapp e')
+  | packbeta : forall v e2,
+      value.t v -> 
+      t (expr.unpack (expr.pack v) e2) (expr.subst [v] e2)
   | pack : forall e e',
       t e e' ->
       t (expr.pack e) (expr.pack e')
   | unpack : forall e1 e1' e2,
       t e1 e1' ->
       t (expr.unpack e1 e2) (expr.unpack e1' e2)
-  | packbeta : forall v e2,
-      value.t v -> 
-      t (expr.unpack (expr.pack v) e2) (expr.subst [v] e2)
   .
   Hint Constructors t.
 
