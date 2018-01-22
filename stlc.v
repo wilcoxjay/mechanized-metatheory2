@@ -468,8 +468,6 @@ End context_has_type.
 
 Module context_equiv.
   Definition t G e1 e2 ty : Prop :=
-    has_type.t G e1 ty /\
-    has_type.t G e2 ty /\
     forall C v1 v2,
       context_has_type.t [] C G ty type.bool ->
       step.star (context.plug C e1) v1 ->

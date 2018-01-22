@@ -433,4 +433,18 @@ Proof.
   - eapply context_has_sem_type.If3; eauto using fundamental.
 Qed.
 
+Lemma has_sem_type_context_equiv :
+  forall G e1 e2 ty,
+    has_sem_type.t G e1 e2 ty ->
+    context_equiv.t G e1 e2 ty.
+Proof.
+  unfold context_equiv.t.
+  intros G e1 e2 ty HST.
+  intros C v1 v2 CHT Star1 Val1 Star2 Val2.
+  destruct (context_fundamental CHT HST) as [WF1 [WF2 E12]].
+  specialize (E12 [] [] (Forall3_nil _)).
+  destruct E12 as [v1' [v2']].
+Admitted.
+
+
 
