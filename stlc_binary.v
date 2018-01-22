@@ -443,8 +443,13 @@ Proof.
   intros C v1 v2 CHT Star1 Val1 Star2 Val2.
   destruct (context_fundamental CHT HST) as [WF1 [WF2 E12]].
   specialize (E12 [] [] (Forall3_nil _)).
-  destruct E12 as [v1' [v2']].
-Admitted.
+  destruct E12 as [v1' [v2' [Star1' [Star2' [Val1' [Val2' V12']]]]]].
+  rewrite expr.subst_identity with (n := 0) in *.
 
+  assert (v1 = v1') by eauto using step.star_det_value.
+  assert (v2 = v2') by eauto using step.star_det_value.
+  subst.
+  destruct V12' as [[??]|[??]]; subst; auto.
+Qed.
 
 
