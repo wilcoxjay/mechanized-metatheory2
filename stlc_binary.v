@@ -333,3 +333,104 @@ Proof.
   destruct (fundamental_closed HT) as [v1 [v2 [Star1 [Star2 [Val1 [Val2 V12]]]]]].
   eauto.
 Qed.
+
+Module context_has_sem_type.
+  Definition t G' C1 C2 G ty ty' :=
+    forall e1 e2,
+      has_sem_type.t G e1 e2 ty ->
+      has_sem_type.t G' (context.plug C1 e1) (context.plug C2 e2) ty'.
+
+  Lemma hole :
+    forall G ty,
+      t G context.hole context.hole G ty ty.
+  Proof.
+    unfold t.
+    simpl.
+    auto.
+  Qed.
+
+  Lemma abs :
+    forall G' C1 C2 G ty ty1' ty2',
+      t (ty1' :: G') C1 C2 (ty1' :: G) ty ty2' ->
+      t G' (context.abs C1) (context.abs C2) (ty1' :: G) ty (type.arrow ty1' ty2').
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    auto using has_sem_type.abs.
+  Qed.
+
+  Lemma app1 :
+    forall G' C1 C2 G ty ty1' ty2' e1 e2,
+      t G' C1 C2 G ty (type.arrow ty1' ty2') ->
+      has_sem_type.t G' e1 e2 ty1' ->
+      t G' (context.app1 C1 e1) (context.app1 C2 e2) G ty ty2'.
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    eauto using has_sem_type.app.
+  Qed.
+
+  Lemma app2 :
+    forall G' C1 C2 G ty ty1' ty2' e1 e2,
+      has_sem_type.t G' e1 e2 (type.arrow ty1' ty2') ->
+      t G' C1 C2 G ty ty1' ->
+      t G' (context.app2 e1 C1) (context.app2 e2 C2) G ty ty2'.
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    eauto using has_sem_type.app.
+  Qed.
+
+  Lemma If1 :
+    forall G' C1 C1' G ty ty' e2 e2' e3 e3',
+      t G' C1 C1' G ty type.bool ->
+      has_sem_type.t G' e2 e2' ty' ->
+      has_sem_type.t G' e3 e3' ty' ->
+      t G' (context.If1 C1 e2 e3) (context.If1 C1' e2' e3') G ty ty'.
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    eauto using has_sem_type.If.
+  Qed.
+
+  Lemma If2 :
+    forall G' C2 C2' G ty ty' e1 e1' e3 e3',
+      has_sem_type.t G' e1 e1' type.bool ->
+      t G' C2 C2' G ty ty' ->
+      has_sem_type.t G' e3 e3' ty' ->
+      t G' (context.If2 e1 C2 e3) (context.If2 e1' C2' e3') G ty ty'.
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    eauto using has_sem_type.If.
+  Qed.
+
+  Lemma If3 :
+    forall G' C3 C3' G ty ty' e1 e1' e2 e2',
+      has_sem_type.t G' e1 e1' type.bool ->
+      has_sem_type.t G' e2 e2' ty' ->
+      t G' C3 C3' G ty ty' ->
+      t G' (context.If3 e1 e2 C3) (context.If3 e1' e2' C3') G ty ty'.
+  Proof.
+    unfold t.
+    cbn [context.plug].
+    eauto using has_sem_type.If.
+  Qed.
+End context_has_sem_type.
+
+Lemma context_fundamental :
+  forall G' C G ty ty',
+    context_has_type.t G' C G ty ty' ->
+    context_has_sem_type.t G' C C G ty ty'.
+Proof.
+  induction 1.
+  - apply context_has_sem_type.hole.
+  - apply context_has_sem_type.abs; auto.
+  - eapply context_has_sem_type.app1; eauto using fundamental.
+  - eapply context_has_sem_type.app2; eauto using fundamental.
+  - eapply context_has_sem_type.If1; eauto using fundamental.
+  - eapply context_has_sem_type.If2; eauto using fundamental.
+  - eapply context_has_sem_type.If3; eauto using fundamental.
+Qed.
+
+

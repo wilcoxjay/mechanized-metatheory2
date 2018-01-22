@@ -406,6 +406,9 @@ Module context.
   | abs : t -> t
   | app1 : t -> expr.t -> t
   | app2 : expr.t -> t -> t
+  | If1 : t -> expr.t -> expr.t -> t
+  | If2 : expr.t -> t -> expr.t -> t
+  | If3 : expr.t -> expr.t -> t -> t
   .
 
   Fixpoint plug (C : t) (e : expr.t) : expr.t :=
@@ -414,6 +417,9 @@ Module context.
     | abs C' => expr.abs (plug C' e)
     | app1 C1 e2 => expr.app (plug C1 e) e2
     | app2 e1 C2 => expr.app e1 (plug C2 e)
+    | If1 C1 e2 e3 => expr.If (plug C1 e) e2 e3
+    | If2 e1 C2 e3 => expr.If e1 (plug C2 e) e3
+    | If3 e1 e2 C3 => expr.If e1 e2 (plug C3 e)
     end.
 End context.
 
@@ -431,6 +437,21 @@ Module context_has_type.
       has_type.t G' e (type.arrow ty1' ty2') ->
       t G' C G ty ty1' ->
       t G' (context.app2 e C) G ty ty2'
+  | If1 : forall G' C1 G ty ty' e2 e3,
+      t G' C1 G ty type.bool ->
+      has_type.t G' e2 ty' ->
+      has_type.t G' e3 ty' ->
+      t G' (context.If1 C1 e2 e3) G ty ty'
+  | If2 : forall G' C2 G ty ty' e1 e3,
+      has_type.t G' e1 type.bool ->
+      t G' C2 G ty ty' ->
+      has_type.t G' e3 ty' ->
+      t G' (context.If2 e1 C2 e3) G ty ty'
+  | If3 : forall G' C3 G ty ty' e1 e2,
+      has_type.t G' e1 type.bool ->
+      has_type.t G' e2 ty' ->
+      t G' C3 G ty ty' ->
+      t G' (context.If3 e1 e2 C3) G ty ty'
   .
 
   Theorem plug :
@@ -440,14 +461,8 @@ Module context_has_type.
         has_type.t G e ty ->
         has_type.t G' (context.plug C e) ty'.
   Proof.
-    induction 1; intros e0 HT0; cbn [context.plug].
-    -  assumption.
-    - apply IHt in HT0.
-      econstructor; eauto.
-    - apply IHt in HT0.
-       econstructor; eauto.
-    - apply IHt in HT0.
-       econstructor; eauto.
+    induction 1; intros e0 HT0; cbn [context.plug]; try assumption;
+      apply IHt in HT0; econstructor; eauto.
   Qed.
 End context_has_type.
 
@@ -463,4 +478,3 @@ Module context_equiv.
       value.t v2 ->
       v1 = v2.
 End context_equiv.
-
