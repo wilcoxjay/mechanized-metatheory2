@@ -249,13 +249,13 @@ Module has_sem_type.
     eapply step.star_trans.
     eapply step.star_app1. now eauto.
     eapply step.star_trans.
-    eapply step.star_app2. now eauto.
+    now eapply step.star_app2; eauto.
     eauto using step.step_l, step.beta.
 
     eapply step.star_trans.
     eapply step.star_app1. now eauto.
     eapply step.star_trans.
-    eapply step.star_app2. now eauto.
+    now eapply step.star_app2; eauto.
     eauto using step.step_l, step.beta.
   Qed.
 

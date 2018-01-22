@@ -283,12 +283,14 @@ End value.
 Module step.
   Inductive t : expr.t -> expr.t -> Prop :=
   | beta : forall e1 e2,
+      value.t e2 ->
       t (expr.app (expr.abs e1) e2)
         (expr.subst [e2] e1)
   | app1  : forall e1 e1' e2,
       t e1 e1' ->
       t (expr.app e1 e2) (expr.app e1' e2)
   | app2  : forall e1 e2 e2',
+      value.t e1 ->
       t e2 e2' ->
       t (expr.app e1 e2) (expr.app e1 e2')
   | IfT : forall e2 e3,
@@ -330,15 +332,15 @@ Module step.
 
   Lemma star_app2 :
     forall e1 e2 e2',
+      value.t e1 ->
       star e2 e2' ->
       star (expr.app e1 e2) (expr.app e1 e2').
   Proof.
-    intros e1 e2 e2' Star.
-    revert e1.
-    induction Star; intros e1.
+    intros e1 e2 e2' Val1 Star.
+    revert e1 Val1.
+    induction Star; intros e1 Val1.
     - constructor.
-    - econstructor; [|apply IHStar].
-      eauto.
+    - econstructor; [|apply IHStar]; auto.
   Qed.
 
   Lemma star_If :
@@ -397,6 +399,71 @@ Module step.
     apply clos_rt_rt1n in Star.
     inversion Star; subst; auto.
     exfalso; eauto using value.
+  Qed.
+
+  Lemma det :
+    forall e1 e2 e2',
+      t e1 e2 ->
+      t e1 e2' ->
+      e2 = e2'.
+  Proof.
+    intros e1 e2 e2' Step.
+    revert e2'.
+    induction Step; intros e2'' Step'; invc Step'; auto;
+      try match goal with
+          | [ H : _ |- _ ] => solve [invc H]
+          end;
+      try solve [exfalso; eauto using value];
+      f_equal; auto.
+  Qed.
+
+  Lemma star_step_det :
+    forall e1 e2 e2',
+      star e1 e2 ->
+      t e1 e2' ->
+      e1 = e2 \/ star e2' e2.
+  Proof.
+    intros e1 e2 e2' Star Step.
+    apply clos_rtn1_rt in Star.
+    apply clos_rt_rt1n in Star.
+    invc Star; auto.
+    right.
+    assert (y = e2') by eauto using det. subst y.
+    apply clos_rt_rtn1.
+    apply clos_rt1n_rt.
+    auto.
+  Qed.
+
+  Lemma star_det :
+    forall e1 e2 e2',
+      star e1 e2 ->
+      star e1 e2' ->
+      star e2 e2' \/ star e2' e2.
+  Proof.
+    intros e1 e2 e2' Star Star'.
+    revert e2' Star'.
+    induction Star; intros e2' Star'.
+    - auto.
+    - specialize (IHStar _ Star'). clear Star'.
+      intuition.
+      + pose proof star_step_det _ _ _ H0 H.
+        intuition.
+        subst. right. econstructor. eauto. constructor.
+      + right. econstructor. eauto. auto.
+  Qed.
+
+  Lemma star_det_value :
+    forall e v v',
+      step.star e v ->
+      step.star e v' ->
+      value.t v ->
+      value.t v' ->
+      v = v'.
+  Proof.
+    intros e v v' Star Star' Val Val'.
+    pose proof star_det _ _ _ Star Star'; clear Star Star'.
+    destruct H as [H|H];
+      eapply star_value in H; eauto.
   Qed.
 End step.
 
