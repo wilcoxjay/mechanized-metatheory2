@@ -806,7 +806,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
       simpl; intros c d1 d2; fold subst_binders shift_binders wf_binders in *;
         f_equal; intuition; autorewrite with list in *.
     - break_match.
-      + eapply Forall_nth; eauto.
+      + eapply Forall_nth_error; eauto.
       + do_nth_error_Some. intuition.
     - apply IHe.
       + now autorewrite with list.
@@ -1149,7 +1149,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
         autorewrite with list in *;
         f_equal; intuition.
     - break_match.
-      + eapply Forall_nth; eauto.
+      + eapply Forall_nth_error; eauto.
       + do_nth_error_Some.
         intuition.
     - apply IHe; auto.

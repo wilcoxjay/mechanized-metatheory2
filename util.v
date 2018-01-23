@@ -137,7 +137,7 @@ Proof.
   - now rewrite IHl1 by omega.
 Qed.
 
-Lemma Forall_nth :
+Lemma Forall_nth_error :
   forall A (P : A -> Prop) l n x,
     Forall P l ->
     nth_error l n = Some x ->

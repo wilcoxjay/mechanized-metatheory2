@@ -73,7 +73,7 @@ Proof.
   intros ty d v WFd HV.
   destruct ty; cbn in HV.
   - break_match; intuition.
-    assert (semtype.wf t) by (eapply Forall_nth; eauto).
+    assert (semtype.wf t) by (eapply Forall_nth_error; eauto).
     now firstorder.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
@@ -92,7 +92,7 @@ Proof.
   intros ty d v F.
   destruct ty; cbn [V]; intuition.
   break_match; intuition.
-  assert (semtype.wf t) by (eapply Forall_nth; eauto).
+  assert (semtype.wf t) by (eapply Forall_nth_error; eauto).
   firstorder.
 Qed.
 
@@ -336,7 +336,7 @@ Proof.
         apply Forall_from_nth.
         intros.
         apply type.wf_shift with (d := 1).
-        eapply Forall_nth; eauto.
+        eapply Forall_nth_error; eauto.
       * constructor; auto.
     + rewrite IHty.
       * simpl. rewrite map_map.
@@ -355,7 +355,7 @@ Proof.
         apply Forall_from_nth.
         intros.
         apply type.wf_shift with (d := 1).
-        eapply Forall_nth; eauto.
+        eapply Forall_nth_error; eauto.
       * constructor; auto.
   - split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
       split; auto; subst e; eexists; (split; [eassumption|]); (split; [reflexivity|]);
@@ -377,7 +377,7 @@ Proof.
         apply Forall_from_nth.
         intros.
         apply type.wf_shift with (d := 1).
-        eapply Forall_nth; eauto.
+        eapply Forall_nth_error; eauto.
       * constructor; auto.
     + rewrite IHty.
       * simpl. rewrite map_map.
@@ -396,7 +396,7 @@ Proof.
         apply Forall_from_nth.
         intros.
         apply type.wf_shift with (d := 1).
-        eapply Forall_nth; eauto.
+        eapply Forall_nth_error; eauto.
       * constructor; auto.
 Qed.
 

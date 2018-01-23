@@ -323,7 +323,7 @@ Module has_type.
       type.wf n ty.
   Proof.
     induction 1; cbn in *; intros F; intuition.
-    - now eapply Forall_nth; eauto.
+    - now eapply Forall_nth_error; eauto.
     - apply IHt.
       rewrite Forall_map.
       eapply Forall_impl; try eassumption.
