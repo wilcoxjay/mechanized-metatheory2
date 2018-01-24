@@ -1,4 +1,4 @@
-From mm Require Import util abt.
+From mm Require Import util abt abtutil.
 
 Module exprop.
   Inductive t' :=
@@ -147,7 +147,7 @@ Module expr_basis.
 End expr_basis.
 
 Module expr.
-  Include abt.abt_util expr_basis.
+  Include abt_util expr_basis.
   Notation abs := expr_ast.abs.
   Notation app := expr_ast.app.
   Notation tt := expr_ast.tt.

@@ -324,3 +324,18 @@ Proof.
   invc H.
   f_equal; auto.
 Qed.
+
+Inductive and3 (P1 P2 P3 : Prop) : Prop :=
+  And3 : P1 -> P2 -> P3 -> and3 P1 P2 P3.
+
+Inductive and4 (P1 P2 P3 P4 : Prop) : Prop :=
+  And4 : P1 -> P2 -> P3 -> P4 -> and4 P1 P2 P3 P4.
+
+Inductive and5 (P1 P2 P3 P4 P5 : Prop) : Prop :=
+  And5 : P1 -> P2 -> P3 -> P4 -> P5 -> and5 P1 P2 P3 P4 P5.
+
+Notation "[ /\ P1 & P2 ]" := (and P1 P2) (only parsing) : type_scope.
+Notation "[ /\ P1 , P2 & P3 ]" := (and3 P1 P2 P3) : type_scope.
+Notation "[ /\ P1 , P2 , P3 & P4 ]" := (and4 P1 P2 P3 P4) : type_scope.
+Notation "[ /\ P1 , P2 , P3 , P4 & P5 ]" := (and5 P1 P2 P3 P4 P5) : type_scope.
+

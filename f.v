@@ -1,4 +1,4 @@
-From mm Require Import util abt.
+From mm Require Import util abt abtutil.
 
 Module tyop.
   Inductive t' :=
@@ -148,7 +148,7 @@ Module type_basis.
 End type_basis.
 
 Module type.
-   Include abt.abt_util type_basis.
+   Include abt_util type_basis.
    Notation arrow := type_ast.arrow.
    Notation all := type_ast.all.
    Notation exist := type_ast.exist.
@@ -273,7 +273,7 @@ Module expr_basis.
 End expr_basis.
 
 Module expr.
-  Include abt.abt_util expr_basis.
+  Include abt_util expr_basis.
   Notation abs := expr_ast.abs.
   Notation app := expr_ast.app.
   Notation tyabs := expr_ast.tyabs.
@@ -337,20 +337,7 @@ Module has_type.
       simpl in *. rewrite type.identity_subst_length in *.
       now rewrite Nat.max_r in * by omega.
     - subst ty2.
-      assert (type.wf (S n) (type.shift 0 1 ty2')).
-      {
-        apply IHt2.
-        constructor; auto.
-        rewrite Forall_map.
-        apply Forall_forall.
-        intros ty' I.
-        apply type.wf_shift with (d := 1).
-        eapply Forall_forall; eauto.
-      }
-
-      apply type.wf_shift_inv with (c := 0) (d := 1) in H1.
-      simpl in *.
-      now rewrite Nat.sub_0_r in *.
+      auto using type.wf_shift_inv', type.wf_map_shift'.
   Qed.
 
   Lemma t_expr_wf :
@@ -404,6 +391,15 @@ Module step.
   Hint Constructors t.
 
   Definition star : expr.t -> expr.t -> Prop := clos_refl_trans_n1 _ t.
+
+  Lemma star_refl :
+    forall e,
+      star e e.
+  Proof.
+    constructor.
+  Qed.
+
+  Hint Resolve star_refl.
 
   Lemma step_l :
     forall e1 e2 e3,

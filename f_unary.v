@@ -96,6 +96,19 @@ Proof.
   firstorder.
 Qed.
 
+Lemma V_list_closed :
+  forall G d vs,
+    Forall candidate.wf d ->
+    Forall2 (fun ty v => V ty d v) G vs ->
+    Forall (expr.wf 0) vs.
+Proof.
+  intros G d vs WFd WFvs.
+  apply Forall_from_nth.
+  intros n e NEe.
+  destruct (Forall2_nth_error2 WFvs NEe) as [ty [NEty Ve]].
+  eauto using V_wf.
+Qed.
+
 Lemma V_E :
   forall ty d v,
     Forall candidate.wf d ->
@@ -105,8 +118,7 @@ Proof.
   intros.
   exists v.
   intuition.
-  - constructor.
-  - eauto using V_value.
+  eauto using V_value.
 Qed.
 
 Lemma E_step :
@@ -305,7 +317,7 @@ Proof.
       intuition.
 Qed.
 
-Lemma V_map_shift' :
+Lemma V_Forall_equiv_shift' :
   forall d D S,
     Forall candidate.wf d ->
     Forall2 (fun P Q => forall e, P e <-> Q e)
@@ -332,9 +344,9 @@ Proof.
   simpl. rewrite map_map.
   split; intro Vv.
   - erewrite <- V_ext. eassumption.
-    constructor; intuition auto using V_map_shift'.
+    constructor; intuition auto using V_Forall_equiv_shift'.
   - erewrite V_ext. eassumption.
-    constructor; intuition auto using V_map_shift'.
+    constructor; intuition auto using V_Forall_equiv_shift'.
 Qed.
 
 Lemma V_subst :
@@ -396,121 +408,154 @@ Proof.
   apply V_subst; auto.
 Qed.
 
-Theorem fundamental :
-  forall n G e ty,
-    Forall (type.wf n) G ->
-    has_type.t n G e ty ->
-    forall d g,
-      length d = n ->
-      Forall candidate.wf d ->
-      Forall2 (fun ty e => V ty d e) G g ->
-      E ty d (expr.subst g e).
+Lemma V_map_shift' :
+  forall S d G g,
+    Forall candidate.wf d ->
+    Forall2 (fun ty e => V ty d e) G g ->
+    Forall2 (fun ty e => V ty (S :: d) e) (map (type.shift 0 1) G) g.
 Proof.
-  intros n G e ty GWF HT.
-  induction HT; intros d g ? WFd WFg; subst n.
-  - simpl. apply V_E; auto.
-    destruct (Forall2_nth_error1 WFg H) as [v [Hv HV]].
-    unfold expr.t in *.
-    now rewrite Hv.
-  - apply V_E; auto.
+  intros S d G g WFd WFg.
+  apply Forall2_map_l.
+  eapply Forall2_impl; [|now eauto].
+  simpl.
+  intros ty' e' V'.
+  now apply V_shift'; auto.
+Qed.
+
+Module has_sem_type.
+  Definition t n G e ty :=
+    [/\ expr.wf (length G) e
+     , type.wf n ty
+     , Forall (type.wf n) G
+     & forall d g,
+         length d = n ->
+         Forall candidate.wf d ->
+         Forall2 (fun ty e => V ty d e) G g ->
+         E ty d (expr.subst g e)
+    ].
+
+  Lemma var :
+    forall n G x ty,
+      Forall (type.wf n) G ->
+      type.wf n ty ->
+      nth_error G x = Some ty ->
+      t n G (expr.var x) ty.
+  Proof.
+    intros n G x ty F WFty NE.
+    split; auto.
+    - do_nth_error_Some.
+      simpl.
+      apply H. congruence.
+    - intros d g ? WFd WFg.
+      simpl. apply V_E; auto.
+      destruct (Forall2_nth_error1 WFg NE) as [v [Hv HV]].
+      unfold expr.t in *.
+      now rewrite Hv.
+  Qed.
+
+  Lemma abs :
+    forall n G e ty1 ty2,
+      t n (ty1 :: G) e ty2 ->
+      t n G (expr.abs e) (type.arrow ty1 ty2).
+  Proof.
+    intros n G e ty1 ty2 [WFe WFty WFG HT].
+    invc WFG.
+    split; [now auto| now auto| now simpl; auto|].
+    intros d g ? WFd WFg.
+    apply V_E; auto.
     cbn [expr.subst V].
+    rewrite <- expr.descend_1.
+    pose proof (Forall2_length WFg) as EG.
     split.
-    + cbn [expr.wf].
-      apply expr.wf_subst.
-      * apply has_type.t_expr_wf in HT.
-        cbn [length] in *.
-        rewrite map_length.
-        now erewrite <- Forall2_length by eauto.
-      * constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros n x Hnx.
-        destruct (Forall2_nth_error2 WFg Hnx) as [y [Hny Vxy]].
-        apply V_wf in Vxy; auto.
-        now apply expr.wf_shift with (c := 0) (d := 1).
-    + eexists. split; [reflexivity|].
-      intros v2 V2.
-      rewrite expr.subst_subst.
-      * apply IHHT; auto.
-        simpl. rewrite map_map.
-        constructor; [assumption|].
-        erewrite map_ext_in.
-        rewrite map_id.
-        assumption.
-        intros e' I. simpl.
-        rewrite expr.subst_shift_singleton.
-        reflexivity.
-        destruct (In_nth_error _ _ I) as [n NE].
-        destruct (Forall2_nth_error2 WFg NE) as [ty' [NE' V']].
-        eapply V_wf; eauto.
-      * simpl. rewrite map_length.
-        apply has_type.t_expr_wf in HT.
-        erewrite <- Forall2_length by eauto.
-        assumption.
-      * simpl. constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros n x NEx.
-        apply expr.wf_shift with (d := 1).
-        destruct (Forall2_nth_error2 WFg NEx) as [y [NEy Vxy]].
-        eauto using V_wf.
-  - cbn [expr.subst].
-    specialize (IHHT1 GWF d g eq_refl WFd WFg).
-    specialize (IHHT2 GWF d g eq_refl WFd WFg).
-    destruct IHHT1 as [v1 [S1 [Val1 V1]]].
-    destruct IHHT2 as [v2 [S2 [Val2 V2]]].
-    destruct V1 as [WF1 [body [? H1]]].
+    + apply expr.wf_subst.
+      * now rewrite expr.descend_length, <- EG.
+      * apply expr.descend_wf with (s := 1).
+        eauto using V_list_closed.
+    + exists (expr.subst (expr.descend 1 g) e).
+      split; [now rewrite expr.descend_1|].
+      intros v Vv.
+      rewrite !expr.subst_cons;
+        firstorder using V_list_closed.
+      now rewrite <- EG.
+  Qed.
+
+  Lemma app :
+    forall n G e1 e2 ty1 ty2,
+      t n G e1 (type.arrow ty1 ty2) ->
+      t n G e2 ty1 ->
+      t n G (expr.app e1 e2) ty2.
+  Proof.
+    intros n G e1 e2 ty1 ty2.
+    intros [WFe1 [WFty1 WFty2] WFG HT1].
+    intros [WFe2 _ _ HT2].
+    split; [ now cbn; auto | now auto | now auto|].
+    intros d g E WFd WFg.
+
+    cbn [expr.subst].
+    specialize (HT1 d g E WFd WFg).
+    specialize (HT2 d g E WFd WFg).
+    destruct HT1 as [v1 [Star1 [Val1 V1]]].
+    destruct HT2 as [v2 [Star2 [Val2 V2]]].
+    destruct V1 as [WFv1 [body1 [? H1]]].
     subst v1.
-    apply E_star with (e' := expr.subst [v2] body); [|now eauto].
+    eapply E_star; [|now eauto].
+
     eapply step.star_trans.
-    eapply step.star_app1; eauto.
+    eapply step.star_app1. now eauto.
     eapply step.star_trans.
-    eapply step.star_app2; eauto.
-    eapply step.step_l.
-    apply step.beta.
-    assumption.
-    constructor.
-  - apply V_E; [assumption|].
+    now eapply step.star_app2; eauto.
+    eauto using step.step_l, step.beta.
+  Qed.
+
+  Lemma tyabs :
+    forall n G e ty,
+      t (S n) (map (type.shift 0 1) G) e ty ->
+      t n G (expr.tyabs e) (type.all ty).
+  Proof.
+    intros n G e ty [WFe WFty WFmG HT].
+    rewrite map_length in *.
+    split; [assumption|assumption|now auto using type.wf_map_shift_inv'|].
+    intros d g ? WFd WFg.
+    apply V_E; [assumption|].
     cbn [expr.subst V].
+    pose proof (Forall2_length WFg) as EG.
     split.
-    + cbn [expr.wf]. apply expr.wf_subst.
-      * eapply has_type.t_expr_wf in HT.
-        rewrite map_length in *.
-        now erewrite <- Forall2_length by eauto.
-      * apply Forall_from_nth.
-        intros n x NEx.
-        destruct (Forall2_nth_error2 WFg NEx) as [y [NEy Vy]].
-        eapply V_wf; eauto.
+    + apply expr.wf_subst.
+      * now rewrite <- EG.
+      * eauto using V_list_closed.
     + eexists. split; [reflexivity|].
       intros S SWF.
-      apply IHHT.
-      * rewrite Forall_map. eapply Forall_impl; [| apply GWF].
-        intros ty' WF'.
-        now apply type.wf_shift with (c := 0) (d := 1).
+      apply HT.
+      * simpl. congruence.
       * auto.
-      * constructor; auto.
-      * apply Forall2_map_l.
-        eapply Forall2_impl; [|now eauto].
-        simpl.
-        intros ty' e' V'.
-        now apply V_shift'; auto.
-  - specialize (IHHT GWF d g eq_refl WFd WFg).
-    destruct IHHT as [v [S [Val Vv]]].
+      * auto using V_map_shift'.
+  Qed.
+
+  Lemma tyapp :
+    forall n G e ty_body ty,
+      type.wf n ty ->
+      t n G e (type.all ty_body) -> 
+      t n G (expr.tyapp e) (type.subst (ty :: type.identity_subst n) ty_body).
+  Proof.
+    intros n G e ty_body ty WFty [WFe WFtyall WFG HT].
+    split; [assumption| now auto using type.wf_subst_id | now auto |].
+
+    intros d g En WFd WFg. subst n.
+    specialize (HT d g eq_refl WFd WFg).
+    destruct HT as [v [S [Val Vv]]].
     destruct Vv as [WFv [body [? Ebody]]].
     cbn [expr.subst].
     subst v.
     eapply E_star.
     eapply step.star_trans.
-    eapply step.star_tyapp.
-    eauto.
+    eapply step.star_tyapp. now eauto.
     eapply step.step_l.
     apply step.tybeta.
-    constructor.
+    now constructor.
+
     apply E_subst.
-    + simpl. rewrite type.identity_subst_length.
-      apply has_type.t_type_wf in HT; auto.
-    + constructor; auto.
-      apply type.wf_identity_subst.
+    + simpl. now rewrite type.identity_subst_length.
+    + auto using type.wf_identity_subst.
     + auto.
     + simpl.
       eapply terminating.iff; [| apply Ebody with (S := V ty d); auto using V_candidate].
@@ -518,8 +563,22 @@ Proof.
       apply V_ext.
       constructor; [now intuition|].
       apply V_map_identity'.
-  - specialize (IHHT GWF d g eq_refl WFd WFg).
-    destruct IHHT as [v [Star [Val Vv]]].
+  Qed.
+
+  Lemma pack :
+    forall n G e ty_interface ty_rep,
+      type.wf n ty_rep ->
+      t n G e (type.subst (ty_rep :: type.identity_subst n) ty_interface) ->
+      t n G (expr.pack e) (type.exist ty_interface).
+  Proof.
+    intros n G e ty_interface ty_rep WFrep [WFe WFtysubst WFG HT].
+
+    split; [ now auto | now simpl; eauto using type.wf_subst_id_inv | now auto | ].
+
+    intros d g En WFd WFg. subst n.
+
+    specialize (HT d g eq_refl WFd WFg).
+    destruct HT as [v [Star [Val Vv]]].
     rewrite V_subst in Vv; auto using type.wf_identity_subst.
     + cbn [expr.subst].
       eapply E_star.
@@ -531,13 +590,23 @@ Proof.
       split.
       * simpl. eauto using V_wf, V_candidate.
       * eauto 10 using V_candidate.
-    + apply has_type.t_type_wf in HT; [|assumption].
-      apply type.wf_subst_inv in HT.
-      cbn [length] in *. rewrite type.identity_subst_length in *.
-      now rewrite Nat.max_r in * by omega.
-  - subst ty2.
-    specialize (IHHT1 GWF d g eq_refl WFd WFg).
-    destruct IHHT1 as [v1 [Star1 [Val1 Vv1]]].
+    + simpl. rewrite type.identity_subst_length.
+      eauto using type.wf_subst_id_inv. 
+  Qed.
+
+  Lemma unpack :
+    forall n G e1 e2 ty1 ty2,
+      t n G e1 (type.exist ty1) ->
+      t (S n) (ty1 :: map (type.shift 0 1) G) e2 (type.shift 0 1 ty2) ->
+      t n G (expr.unpack e1 e2) ty2.
+  Proof.
+    intros n G e1 e2 ty1 ty2 [WFe1 WFexty1 WFG HT1] [WFe2 WFty2 _ HT2].
+    split; [ now simpl in *; rewrite map_length in *; auto | now auto using type.wf_shift_inv' | now auto | ].
+    intros d g En WFd WFg. subst n.
+    cbn[length] in WFe2. rewrite map_length in WFe2.
+
+    specialize (HT1 d g eq_refl WFd WFg).
+    destruct HT1 as [v1 [Star1 [Val1 Vv1]]].
     cbn [V] in Vv1.
     destruct Vv1 as [WFv1 [v2 [Val2 [? [S [SWF Vv2]]]]]].
     subst v1.
@@ -549,55 +618,39 @@ Proof.
     apply step.packbeta. assumption.
     constructor.
 
-    set (G' := ty1 :: map (type.shift 0 1) G) in *.
-    assert (Forall (type.wf (Datatypes.S (length d))) G') as G'WF.
-    { subst G'. constructor.
-      - apply has_type.t_type_wf in HT1; auto.
-      - rewrite Forall_map.
-        eapply Forall_impl; [|eassumption].
-        intros ty WF.
-        now apply type.wf_shift with (d := 1).
-    }
-    specialize (IHHT2 G'WF (S :: d) (v2 :: g) eq_refl ltac:(auto)).
-
-    assert (Forall2 (fun ty e => V ty (S :: d) e) G' (v2 :: g)) as WFg'.
-    {
-      constructor; auto.
-      apply Forall2_map_l.
-      eapply Forall2_impl; [|eassumption]. simpl.
-      intros ty e.
-      now rewrite <- V_shift'.
-    }
-    specialize (IHHT2 WFg').
-    destruct IHHT2 as [v3 [Star3 [Val3 Vv3]]].
-    assert (Forall (expr.wf 0) g).
-    {
-      apply Forall_forall.
-      intros e I.
-      apply In_nth_error in I.
-      destruct I as [n NE].
-      eapply (Forall2_nth_error2 WFg) in NE.
-      destruct NE as [ty [_ Ve]].
-      apply V_wf in Ve; auto.
-    }
-
-    rewrite expr.subst_subst.
-    + simpl. rewrite map_map.
+    rewrite <- expr.descend_1.
+    rewrite expr.subst_cons.
+    - set (G' := ty1 :: map (type.shift 0 1) G) in *.
+      specialize (HT2 (S :: d) (v2 :: g) eq_refl ltac:(auto)
+                      ltac:(subst G'; auto using V_map_shift')).
+      destruct HT2 as [v3 [Star3 [Val3 Vv3]]].
+      eapply E_star. eauto.
       rewrite <- V_shift' in Vv3 by auto.
-      erewrite map_ext_in, map_id.
-      * eapply E_star. eauto.
-        apply V_E; auto.
-      * intros. rewrite expr.subst_shift_singleton; auto.
-        eapply Forall_forall; eauto.
-    + apply has_type.t_expr_wf in HT2.
-      unfold type.t, type_basis.t in *.
-      rewrite (Forall2_length WFg') in HT2.
-      simpl in *. now rewrite map_length.
-    + simpl. constructor. simpl. omega.
-      rewrite Forall_map.
-      eapply Forall_impl; [|eassumption].
-      intros.
-      now apply expr.wf_shift with (d := 1).
+      apply V_E; auto.
+    - unfold type.t in *.
+      now rewrite (Forall2_length WFg) in *.
+    - eauto using V_list_closed.
+  Qed.
+End has_sem_type.
+
+Theorem fundamental :
+  forall n G e ty,
+    Forall (type.wf n) G ->
+    has_type.t n G e ty ->
+    has_sem_type.t n G e ty.
+Proof.
+  intros n G e ty GWF HT.
+  induction HT.
+  - apply has_sem_type.var; eauto.
+    eapply Forall_nth_error; eauto.
+  - now apply has_sem_type.abs; auto.
+  - now eapply has_sem_type.app; eauto.
+  - now apply has_sem_type.tyabs; auto using type.wf_map_shift'.
+  - now apply has_sem_type.tyapp; auto.
+  - now eapply has_sem_type.pack; eauto.
+  - subst ty2.
+    apply has_type.t_type_wf in HT1; auto.
+    eapply has_sem_type.unpack; eauto using type.wf_map_shift'.
 Qed.
 
 Print Assumptions fundamental.
