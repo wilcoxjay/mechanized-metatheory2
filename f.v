@@ -5,6 +5,7 @@ Module tyop.
   | arrow
   | all
   | exist
+  | bool
   .
   Definition t := t'.
 
@@ -13,12 +14,12 @@ Module tyop.
     | arrow => [0; 0]
     | all => [1]
     | exist => [1]
+    | bool => []
     end.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
     decide equality.
   Defined.
-
 End tyop.
 
 Module exprop.
@@ -29,6 +30,9 @@ Module exprop.
   | tyapp
   | pack
   | unpack
+  | tt
+  | ff
+  | If
   .
   Definition t := t'.
 
@@ -40,6 +44,9 @@ Module exprop.
     | tyapp => [0]
     | pack => [0]
     | unpack => [0; 1]
+    | tt => []
+    | ff => []
+    | If => [0; 0; 0]
     end.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
@@ -55,6 +62,7 @@ Module type_ast.
   | arrow : t -> t -> t
   | all : t -> t
   | exist : t -> t
+  | bool : t
   .
 End type_ast.
 
@@ -70,6 +78,7 @@ Module type_basis.
     | arrow ty1 ty2 => A.op tyop.arrow [A.bind 0 (to_abt ty1); A.bind 0 (to_abt ty2)]
     | all ty' => A.op tyop.all [A.bind 1 (to_abt ty')]
     | exist ty' => A.op tyop.exist [A.bind 1 (to_abt ty')]
+    | bool => A.op tyop.bool []
     end.
 
   Fixpoint of_abt (a : A.t) : t :=
@@ -78,6 +87,7 @@ Module type_basis.
     | A.op tyop.arrow [A.bind 0 a1; A.bind 0 a2] => arrow (of_abt a1) (of_abt a2)
     | A.op tyop.all [A.bind 1 a'] => all (of_abt a')
     | A.op tyop.exist [A.bind 1 a'] => exist (of_abt a')
+    | A.op tyop.bool [] => bool
     | _ => var 0 (* bogus *)
     end.
 
@@ -87,6 +97,7 @@ Module type_basis.
     | arrow ty1 ty2 => arrow (shift c d ty1) (shift c d ty2)
     | all ty' => all (shift (S c) d ty')
     | exist ty' => exist (shift (S c) d ty')
+    | bool => bool
     end.
 
   Fixpoint subst rho ty :=
@@ -98,6 +109,7 @@ Module type_basis.
     | arrow ty1 ty2 => arrow (subst rho ty1) (subst rho ty2)
     | all ty' => all (subst (var 0 :: map (shift 0 1) rho) ty')
     | exist ty' => exist (subst (var 0 :: map (shift 0 1) rho) ty')
+    | bool => bool
     end.
 
   Fixpoint wf n ty :=
@@ -106,6 +118,7 @@ Module type_basis.
     | arrow ty1 ty2 => wf n ty1 /\ wf n ty2
     | all ty' => wf (S n) ty'
     | exist ty' => wf (S n) ty'
+    | bool => True
     end.
 
   Fixpoint identity_subst (n : nat) : list t :=
@@ -114,7 +127,7 @@ Module type_basis.
     | S n => var 0 :: map (shift 0 1) (identity_subst n)
     end.
 
-    Lemma ws_to_abt : forall e, A.ws (to_abt e).
+  Lemma ws_to_abt : forall e, A.ws (to_abt e).
   Proof. A.basis_util.prove_ws_to_abt. Qed.
 
   Lemma of_to_abt : forall e, of_abt (to_abt e) = e.
@@ -152,6 +165,7 @@ Module type.
    Notation arrow := type_ast.arrow.
    Notation all := type_ast.all.
    Notation exist := type_ast.exist.
+   Notation bool := type_ast.bool.
 End type.
 
 Module expr_abt := abt.abt exprop.
@@ -165,6 +179,9 @@ Module expr_ast.
   | tyapp : t -> t
   | pack : t -> t
   | unpack : t -> t -> t
+  | tt : t
+  | ff : t
+  | If : t -> t -> t -> t
   .
 End expr_ast.
 
@@ -183,6 +200,11 @@ Module expr_basis.
     | tyapp e' => A.op exprop.tyapp [A.bind 0 (to_abt e')]
     | pack e' => A.op exprop.pack [A.bind 0 (to_abt e')] 
     | unpack e1 e2 => A.op exprop.unpack [A.bind 0 (to_abt e1); A.bind 1 (to_abt e2)] 
+    | tt => A.op exprop.tt []
+    | ff => A.op exprop.ff []
+    | If e1 e2 e3 => A.op exprop.If [A.bind 0 (to_abt e1);
+                                            A.bind 0 (to_abt e2);
+                                            A.bind 0 (to_abt e3)]
     end.
 
   Fixpoint of_abt (a : A.t) : t :=
@@ -194,6 +216,10 @@ Module expr_basis.
     | A.op exprop.tyapp [A.bind 0 a'] => tyapp (of_abt a')
     | A.op exprop.pack [A.bind 0 a'] => pack (of_abt a')
     | A.op exprop.unpack [A.bind 0 a1; A.bind 1 a2] => unpack (of_abt a1) (of_abt a2)
+    | A.op exprop.tt [] => tt
+    | A.op exprop.ff [] => ff
+    | A.op exprop.If [A.bind 0 a1; A.bind 0 a2; A.bind 0 a3] =>
+      If (of_abt a1) (of_abt a2) (of_abt a3)
     | _ => var 0 (* bogus *)
     end.
 
@@ -206,6 +232,9 @@ Module expr_basis.
     | tyapp e' => tyapp (shift c d e')
     | pack e' => pack (shift c d e')
     | unpack e1 e2 => unpack (shift c d e1) (shift (S c) d e2)
+    | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (shift c d e1) (shift c d e2) (shift c d e3)
     end.
 
   Fixpoint subst rho e :=
@@ -220,6 +249,9 @@ Module expr_basis.
     | tyapp e' => tyapp (subst rho e')
     | pack e' => pack (subst rho e')
     | unpack e1 e2 => unpack (subst rho e1) (subst (var 0 :: map (shift 0 1) rho) e2)
+    | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (subst rho e1) (subst rho e2) (subst rho e3)
     end.
 
   Fixpoint wf n e :=
@@ -231,6 +263,9 @@ Module expr_basis.
     | tyapp e' => wf n e'
     | pack e' => wf n e'
     | unpack e1 e2 => wf n e1 /\ wf (S n) e2
+    | tt => True
+    | ff => True
+    | If e1 e2 e3 => wf n e1 /\ wf n e2 /\ wf n e3
     end.
 
   Fixpoint identity_subst (n : nat) : list t :=
@@ -280,6 +315,9 @@ Module expr.
   Notation tyapp := expr_ast.tyapp.
   Notation pack := expr_ast.pack.
   Notation unpack := expr_ast.unpack.
+  Notation tt := expr_ast.tt.
+  Notation ff := expr_ast.ff.
+  Notation If := expr_ast.If.
 End expr.
 
 Module has_type.
@@ -314,6 +352,16 @@ Module has_type.
       t (S n) (ty1 :: map (type.shift 0 1) G) e2 ty2 ->
       ty2 = type.shift 0 1 ty2' ->
       t n G (expr.unpack e1 e2) ty2'
+
+  | tt : forall n G,
+      t n G expr.tt type.bool
+  | ff : forall n G,
+      t n G expr.ff type.bool
+  | If : forall n G e1 e2 e3 ty,
+      t n G e1 type.bool ->
+      t n G e2 ty -> 
+      t n G e3 ty ->
+      t n G (expr.If e1 e2 e3) ty
   .
 
   Lemma t_type_wf :
@@ -357,6 +405,8 @@ Module value.
   | abs : forall e, t (expr.abs e)
   | tyabs : forall e, t (expr.tyabs e)
   | pack : forall e, t e -> t (expr.pack e)
+  | tt : t expr.tt
+  | ff : t expr.ff
   .
 End value.
 
@@ -387,6 +437,13 @@ Module step.
   | unpack : forall e1 e1' e2,
       t e1 e1' ->
       t (expr.unpack e1 e2) (expr.unpack e1' e2)
+  | IfT : forall e2 e3,
+      t (expr.If expr.tt e2 e3) e2
+  | IfF : forall e2 e3,
+      t (expr.If expr.ff e2 e3) e3
+  | If : forall e1 e1' e2 e3,
+      t e1 e1' ->
+      t (expr.If e1 e2 e3) (expr.If e1' e2 e3)
   .
   Hint Constructors t.
 
@@ -470,6 +527,19 @@ Module step.
     induction Star.
     - constructor.
     - econstructor; [|apply IHStar]; eauto.
+  Qed.
+
+  Lemma star_If :
+    forall e1 e1' e2 e3,
+      star e1 e1' ->
+      star (expr.If e1 e2 e3) (expr.If e1' e2 e3).
+  Proof.
+    intros e1 e1' e2 e3 Star.
+    revert e2 e3.
+    induction Star; intros e2 e3.
+    - constructor.
+    - econstructor; [|apply IHStar].
+      eauto.
   Qed.
 
   Lemma star_trans :

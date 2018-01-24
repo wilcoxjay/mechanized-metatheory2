@@ -59,6 +59,7 @@ Fixpoint V ty (d : list candidate.t) e :=
       exists S : candidate.t,
         candidate.wf S /\
         V ty' (S :: d) v
+    | type.bool => e = expr.tt \/ e = expr.ff
   end.
 
 Notation E ty d :=
@@ -81,6 +82,7 @@ Proof.
     subst. constructor.
   - destruct HV as [WF [v' [Valv' [? [S [SWF Vv']]]]]].
     subst. constructor. auto.
+  - intuition; subst; constructor.
 Qed.
 
 Lemma V_wf :
@@ -91,9 +93,11 @@ Lemma V_wf :
 Proof.
   intros ty d v F.
   destruct ty; cbn [V]; intuition.
-  break_match; intuition.
-  assert (candidate.wf t) by (eapply Forall_nth_error; eauto).
-  firstorder.
+  - break_match; intuition.
+    assert (candidate.wf t) by (eapply Forall_nth_error; eauto).
+    firstorder.
+  - subst; simpl; auto.
+  - subst; simpl; auto.
 Qed.
 
 Lemma V_list_closed :
@@ -144,14 +148,13 @@ Proof.
   now induction Star; eauto using E_step.
 Qed.
 
-
 Lemma V_shift :
   forall ty d1 d2 d3 v,
     Forall candidate.wf (d1 ++ d3) ->
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty as [alpha| | |]; intros d1 d2 d3 v F; simpl.
+  induction ty as [alpha| | | |]; intros d1 d2 d3 v F; simpl.
   - destruct (Nat.ltb_spec alpha (length d1)).
     + rewrite !nth_error_app1 by assumption. intuition.
     + rewrite !nth_error_app2 by omega.
@@ -189,6 +192,7 @@ Proof.
     + rewrite app_comm_cons in *.
       rewrite IHty with (d1 := (S :: d1)); eauto.
       constructor; auto.
+  - firstorder.
 Qed.
 
 Lemma V_shift' :
@@ -315,6 +319,7 @@ Proof.
       apply Vv'.
       constructor; auto.
       intuition.
+  - firstorder.
 Qed.
 
 Lemma V_Forall_equiv_shift' :
@@ -394,6 +399,7 @@ Proof.
       * now rewrite type.descend_length.
       * now apply type.descend_wf with (s := 1).
       * constructor; auto.
+  - firstorder.
 Qed.
 
 Lemma E_subst :
@@ -631,6 +637,54 @@ Module has_sem_type.
       now rewrite (Forall2_length WFg) in *.
     - eauto using V_list_closed.
   Qed.
+
+  Lemma tt :
+    forall n G,
+      Forall (type.wf n) G ->
+      t n G expr.tt type.bool.
+  Proof.
+    intros n G F.
+    split; [ now simpl; auto | now simpl; auto | assumption | ].
+    intros d g En WFd WFg.
+    apply V_E; [assumption|].
+    cbn.
+    intuition.
+  Qed.
+
+  Lemma ff :
+    forall n G,
+      Forall (type.wf n) G ->
+      t n G expr.ff type.bool.
+  Proof.
+    intros n G F.
+    split; [ now simpl; auto | now simpl; auto | assumption | ].
+    intros d g En WFd WFg.
+    apply V_E; [assumption|].
+    cbn.
+    intuition.
+  Qed.
+
+  Lemma If :
+    forall G n e1 e2 e3 ty,
+      t n G e1 type.bool ->
+      t n G e2 ty ->
+      t n G e3 ty ->
+      t n G (expr.If e1 e2 e3) ty.
+  Proof.
+    intros G n e1 e2 e3 ty.
+    intros [WFe1 _ WFG HT1].
+    intros [WFe2 WFty _ HT2].
+    intros [WFe3 _ _ HT3].
+    split; [ now simpl; auto | assumption | assumption | ].
+    intros d g En WFd WFg.
+
+    cbn [expr.subst].
+    specialize (HT1 d g En WFd WFg).
+    destruct HT1 as [v1 [Star1 [Val1 V1]]].
+    eapply E_star; [apply step.star_If|]; eauto.
+    destruct V1 as [?|?]; subst;
+      (eapply E_step; [constructor|]); auto.
+  Qed.
 End has_sem_type.
 
 Theorem fundamental :
@@ -650,7 +704,10 @@ Proof.
   - now eapply has_sem_type.pack; eauto.
   - subst ty2.
     apply has_type.t_type_wf in HT1; auto.
-    eapply has_sem_type.unpack; eauto using type.wf_map_shift'.
+    now eapply has_sem_type.unpack; eauto using type.wf_map_shift'.
+  - now apply has_sem_type.tt.
+  - now apply has_sem_type.ff.
+  - now apply has_sem_type.If; auto.
 Qed.
 
 Print Assumptions fundamental.
