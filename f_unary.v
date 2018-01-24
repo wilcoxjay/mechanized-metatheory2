@@ -21,16 +21,16 @@ Module terminating.
   Proof. firstorder. Qed.
 End terminating.
 
-Module semtype.
+Module candidate.
   Definition t := expr.t -> Prop.
 
   Definition wf (S : t) :=
     forall e,
       S e ->
       value.t e /\ expr.wf 0 e.
-End semtype.
+End candidate.
 
-Fixpoint V ty (d : list semtype.t) e :=
+Fixpoint V ty (d : list candidate.t) e :=
   match ty with
   | type_ast.var alpha =>
     match nth_error d alpha with
@@ -48,16 +48,16 @@ Fixpoint V ty (d : list semtype.t) e :=
     expr.wf 0 e /\
     exists body,
       e = expr.tyabs body /\
-      forall (S : semtype.t),
-        semtype.wf S  ->
+      forall (S : candidate.t),
+        candidate.wf S  ->
         terminating.t (V ty' (S :: d)) body
   | type.exist ty' =>
     expr.wf 0 e /\
     exists v,
       value.t v /\
       e = expr.pack v /\
-      exists S : semtype.t,
-        semtype.wf S /\
+      exists S : candidate.t,
+        candidate.wf S /\
         V ty' (S :: d) v
   end.
 
@@ -66,14 +66,14 @@ Notation E ty d :=
 
 Lemma V_value :
   forall ty d v,
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     V ty d v ->
     value.t v.
 Proof.
   intros ty d v WFd HV.
   destruct ty; cbn in HV.
   - break_match; intuition.
-    assert (semtype.wf t) by (eapply Forall_nth_error; eauto).
+    assert (candidate.wf t) by (eapply Forall_nth_error; eauto).
     now firstorder.
   - destruct HV as [WF [body [E H]]].
     subst. constructor.
@@ -85,20 +85,20 @@ Qed.
 
 Lemma V_wf :
   forall ty d v,
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     V ty d v ->
     expr.wf 0 v.
 Proof.
   intros ty d v F.
   destruct ty; cbn [V]; intuition.
   break_match; intuition.
-  assert (semtype.wf t) by (eapply Forall_nth_error; eauto).
+  assert (candidate.wf t) by (eapply Forall_nth_error; eauto).
   firstorder.
 Qed.
 
 Lemma V_E :
   forall ty d v,
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     V ty d v ->
     E ty d v.
 Proof.
@@ -135,7 +135,7 @@ Qed.
 
 Lemma V_shift :
   forall ty d1 d2 d3 v,
-    Forall semtype.wf (d1 ++ d3) ->
+    Forall candidate.wf (d1 ++ d3) ->
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
@@ -182,7 +182,7 @@ Qed.
 
 Lemma V_shift' :
   forall ty S d v,
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     V ty d v <-> V (type.shift 0 1 ty) (S :: d) v.
 Proof.
   intros.
@@ -234,10 +234,10 @@ Proof.
   now rewrite map_id in H.
 Qed.
 
-Lemma V_semtype :
+Lemma V_candidate :
   forall ty d,
-    Forall semtype.wf d ->
-    semtype.wf (V ty d).
+    Forall candidate.wf d ->
+    candidate.wf (V ty d).
 Proof.
   intros.
   split.
@@ -254,13 +254,13 @@ Proof.
   induction ty; simpl; intros d1 d2 F e.
   - break_match.
     + destruct (Forall2_nth_error1 F Heqo) as [t' [NE' H]].
-      unfold semtype.t.
+      unfold candidate.t.
       now rewrite NE'.
     + pose proof Forall2_length F.
       pose proof nth_error_None d1 alpha.
       pose proof nth_error_None d2 alpha.
       assert (nth_error d2 alpha = None) by intuition.
-      unfold semtype.t. rewrite H2.
+      unfold candidate.t. rewrite H2.
       intuition.
   - specialize (IHty1 d1 d2 F).
     specialize (IHty2 d1 d2 F).
@@ -303,7 +303,7 @@ Lemma V_subst :
   forall ty D d,
     type.wf (length D) ty ->
     Forall (type.wf (length d)) D ->
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     (forall e, V (type.subst D ty) d e <-> V ty (map (fun ty0 => V ty0 d) D) e).
 Proof.
   induction ty; simpl; intros D d WFty F WFd e.
@@ -404,7 +404,7 @@ Lemma E_subst :
   forall ty D d,
     type.wf (length D) ty ->
     Forall (type.wf (length d)) D ->
-    Forall semtype.wf d ->
+    Forall candidate.wf d ->
     (forall e, E (type.subst D ty) d e <-> E ty (map (fun ty0 => V ty0 d) D) e).
 Proof.
   intros ty D d TWF F SWF.
@@ -418,7 +418,7 @@ Theorem fundamental :
     has_type.t n G e ty ->
     forall d g,
       length d = n ->
-      Forall semtype.wf d ->
+      Forall candidate.wf d ->
       Forall2 (fun ty e => V ty d e) G g ->
       E ty d (expr.subst g e).
 Proof.
@@ -529,7 +529,7 @@ Proof.
       apply type.wf_identity_subst.
     + auto.
     + simpl.
-      eapply terminating.iff; [| apply Ebody with (S := V ty d); auto using V_semtype].
+      eapply terminating.iff; [| apply Ebody with (S := V ty d); auto using V_candidate].
       intros e'.
       apply V_ext.
       constructor; [now intuition|].
@@ -545,8 +545,8 @@ Proof.
         by (simpl; constructor; intuition; apply V_map_identity').
       cbn [V].
       split.
-      * simpl. eauto using V_wf, V_semtype.
-      * eauto 10 using V_semtype.
+      * simpl. eauto using V_wf, V_candidate.
+      * eauto 10 using V_candidate.
     + apply has_type.t_type_wf in HT; [|assumption].
       apply type.wf_subst_inv in HT.
       cbn [length] in *. rewrite type.identity_subst_length in *.
@@ -650,9 +650,9 @@ Proof.
   destruct Vv as [WF [body [? Ebody]]].
   subst v.
   set (S := fun _ : expr.t => False).
-  assert (semtype.wf S) as SWF.
+  assert (candidate.wf S) as SWF.
   {
-    unfold semtype.wf.
+    unfold candidate.wf.
     subst S.
     simpl.
     now intuition.
@@ -692,8 +692,8 @@ Proof.
   destruct V1 as [WF1 [body [? Sbody]]].
   subst.
   set (S := fun x => x = v).
-  assert (semtype.wf S) as SWF.
-  { unfold semtype.wf. subst S. simpl. intros. subst.
+  assert (candidate.wf S) as SWF.
+  { unfold candidate.wf. subst S. simpl. intros. subst.
     intuition.
     now apply has_type.t_expr_wf in HTv.
   }
@@ -736,8 +736,8 @@ Proof.
   cbn [V] in Vf.
   destruct Vf as [WFf [body [? Hf]]]. subst f.
   set (S := fun x => x = v1 \/ x = v2).
-  assert (semtype.wf S) as SWF.
-  { unfold semtype.wf. subst S. simpl. intros.
+  assert (candidate.wf S) as SWF.
+  { unfold candidate.wf. subst S. simpl. intros.
     intuition; subst; auto.
     - now apply has_type.t_expr_wf in HTv1.
     - now apply has_type.t_expr_wf in HTv2.
