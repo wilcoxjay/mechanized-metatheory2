@@ -36,7 +36,8 @@ detail below.
 
 ## References
 
-Many of the results are based on existing literature, including:
+I found the following references especially helpful:
+
 - [Semantics of Type Systems](https://plv.mpi-sws.org/semantics/2017/lecturenotes.pdf)
   by Derek Dreyer et al. The termination proofs for STLC and System F
   are formalized based on these notes.
