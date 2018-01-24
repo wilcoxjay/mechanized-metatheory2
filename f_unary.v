@@ -139,24 +139,24 @@ Lemma V_shift :
     V ty (d1 ++ d3) v <->
     V (type.shift (length d1) (length d2) ty) (d1 ++ d2 ++ d3) v.
 Proof.
-  induction ty as [alpha| | |]; intros d1 d2 d3 v F.
-  - simpl.
-    destruct (Nat.ltb_spec alpha (length d1)).
+  induction ty as [alpha| | |]; intros d1 d2 d3 v F; simpl.
+  - destruct (Nat.ltb_spec alpha (length d1)).
     + rewrite !nth_error_app1 by assumption. intuition.
     + rewrite !nth_error_app2 by omega.
       do_app2_minus.
       now auto.
-  - simpl.
-    split; intros Vv; destruct Vv as [WF [body [? Hv]]]; (split; [assumption|]);
+  - split; intros Vv; destruct Vv as [WF [body [? Hv]]]; (split; [assumption|]);
       subst v; eexists; (split; [reflexivity|]);
-        intros v2 V2;
-        [rewrite <- IHty1 in V2 by assumption
-        |rewrite (IHty1 d1 d2 d3) in V2 by assumption];
-        apply Hv in V2;
-        (eapply terminating.impl; [|eassumption]);
-        intros e; rewrite IHty2; eauto.
-  - simpl.
-    split; intros Vv; destruct Vv as [Wf [body [? Hv]]];
+        intros v2 V2.
+    + rewrite <- IHty1 in V2 by assumption.
+      apply Hv in V2.
+      eapply terminating.impl; [|eassumption].
+      intros e; rewrite IHty2; eauto.
+    + rewrite (IHty1 d1 d2 d3) in V2 by assumption.
+      apply Hv in V2.
+      eapply terminating.impl; [|eassumption].
+      intros e; rewrite IHty2; eauto.
+  - split; intros Vv; destruct Vv as [Wf [body [? Hv]]];
       split; auto; subst v; eexists; (split; [reflexivity|]);
         intros S WFS.
     + destruct (Hv _ WFS) as [v2 [Star2 [Val2 V2]]].
@@ -168,8 +168,7 @@ Proof.
       specialize (IHty (S :: d1) d2 d3 v2).
       apply IHty; auto.
       simpl. constructor; auto.
-  - simpl.
-    split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
+  - split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
       split; auto; subst v; eexists; (split; [eassumption|]); (split; [reflexivity|]);
         exists S; (split; [assumption|]).
     + rewrite app_comm_cons.
@@ -264,8 +263,11 @@ Proof.
       intuition.
   - specialize (IHty1 d1 d2 F).
     specialize (IHty2 d1 d2 F).
-    split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
-      intros e2 V2.
+    split; intros [WF [body [? H]]];
+      (split; [assumption|]);
+      subst; exists body;
+        (split; [reflexivity|]);
+        intros e2 V2.
     + rewrite <- terminating.iff.
       apply H.
       firstorder.
@@ -274,8 +276,12 @@ Proof.
       apply H.
       firstorder.
       assumption.
-  - split; intros [WF [body [? H]]]; (split; [assumption|]); subst; exists body; (split; [reflexivity|]);
-      intros S SWF; specialize (IHty (S :: d1) (S :: d2)).
+  - split; intros [WF [body [? H]]];
+      (split; [assumption|]);
+      subst; exists body;
+        (split; [reflexivity|]);
+        intros S SWF;
+        specialize (IHty (S :: d1) (S :: d2)).
     + rewrite <- terminating.iff.
       apply H.
       apply SWF.
@@ -299,6 +305,38 @@ Proof.
       intuition.
 Qed.
 
+Lemma V_map_shift' :
+  forall d D S,
+    Forall candidate.wf d ->
+    Forall2 (fun P Q => forall e, P e <-> Q e)
+            (map (fun ty => V ty d) D)
+            (map (fun ty => V (type.shift 0 1 ty) (S :: d)) D).
+Proof.
+  intros d D S F.
+  apply Forall2_map.
+  apply Forall2_from_forall; auto.
+  intros x y z NEy NEz e.
+  unfold type_basis.t in *.
+  assert (y = z) by congruence.
+  subst.
+  apply V_shift'; auto.
+Qed.
+
+Lemma V_descend :
+  forall ty S d D v,
+    Forall candidate.wf d ->
+    V ty (S :: map (fun ty0 => V ty0 d) D) v <->
+    V ty (map (fun ty0 => V ty0 (S :: d)) (type.descend 1 D)) v.
+Proof.
+  intros ty S d D v F.
+  simpl. rewrite map_map.
+  split; intro Vv.
+  - erewrite <- V_ext. eassumption.
+    constructor; intuition auto using V_map_shift'.
+  - erewrite V_ext. eassumption.
+    constructor; intuition auto using V_map_shift'.
+Qed.
+
 Lemma V_subst :
   forall ty D d,
     type.wf (length D) ty ->
@@ -315,88 +353,34 @@ Proof.
     setoid_rewrite IHty1; try solve [intuition].
     setoid_rewrite IHty2; try solve [intuition].
   - unfold terminating.t.
+    rewrite <- type.descend_1 in *.
     split; intros [WF [body [? Ebody]]]; (split;[assumption|]);
       subst; exists body; (split; [reflexivity|]);
         intros S SWF; specialize (Ebody S SWF);
           destruct Ebody as [v [Star [Val Vv]]]; exists v; intuition.
     + rewrite IHty in Vv.
-      * simpl in Vv. rewrite map_map in Vv.
-        eapply V_ext; [|apply Vv].
-        constructor; [now intuition|].
-        apply Forall2_map.
-        apply Forall2_from_forall; auto.
-        intros.
-        unfold type_basis.t in *.
-        assert (y = z) by congruence.
-        subst.
-        apply V_shift'; auto.
-      * simpl. rewrite map_length. auto.
-      * simpl. constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros.
-        apply type.wf_shift with (d := 1).
-        eapply Forall_nth_error; eauto.
+      * now rewrite V_descend.
+      * now rewrite type.descend_length.
+      * now apply type.descend_wf with (s := 1).
       * constructor; auto.
     + rewrite IHty.
-      * simpl. rewrite map_map.
-        eapply V_ext; [|apply Vv].
-        constructor; [now intuition|].
-        apply Forall2_map.
-        apply Forall2_from_forall; auto.
-        intros.
-        unfold type_basis.t in *.
-        assert (y = z) by congruence.
-        subst.
-        rewrite <- V_shift'; intuition.
-      * simpl. rewrite map_length. auto.
-      * simpl. constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros.
-        apply type.wf_shift with (d := 1).
-        eapply Forall_nth_error; eauto.
+      * now rewrite <- V_descend.
+      * now rewrite type.descend_length.
+      * now apply type.descend_wf with (s := 1).
       * constructor; auto.
-  - split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
+  - rewrite <- type.descend_1 in *.
+    split; intros Vv; destruct Vv as [WF [v' [Val' [? [S [SWF Vv']]]]]];
       split; auto; subst e; eexists; (split; [eassumption|]); (split; [reflexivity|]);
         exists S; (split; [assumption|]).
     + rewrite IHty in Vv'.
-      * simpl in Vv'. rewrite map_map in Vv'.
-        eapply V_ext; [|apply Vv'].
-        constructor; [now intuition|].
-        apply Forall2_map.
-        apply Forall2_from_forall; auto.
-        intros.
-        unfold type_basis.t in *.
-        assert (y = z) by congruence.
-        subst.
-        apply V_shift'; auto.
-      * simpl. rewrite map_length. auto.
-      * simpl. constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros.
-        apply type.wf_shift with (d := 1).
-        eapply Forall_nth_error; eauto.
+      * now rewrite V_descend.
+      * now rewrite type.descend_length.
+      * now apply type.descend_wf with (s := 1).
       * constructor; auto.
     + rewrite IHty.
-      * simpl. rewrite map_map.
-        eapply V_ext; [|apply Vv'].
-        constructor; [now intuition|].
-        apply Forall2_map.
-        apply Forall2_from_forall; auto.
-        intros.
-        unfold type_basis.t in *.
-        assert (y = z) by congruence.
-        subst.
-        rewrite <- V_shift'; intuition.
-      * simpl. rewrite map_length. auto.
-      * simpl. constructor; [simpl; omega|].
-        rewrite Forall_map.
-        apply Forall_from_nth.
-        intros.
-        apply type.wf_shift with (d := 1).
-        eapply Forall_nth_error; eauto.
+      * now rewrite <- V_descend.
+      * now rewrite type.descend_length.
+      * now apply type.descend_wf with (s := 1).
       * constructor; auto.
 Qed.
 

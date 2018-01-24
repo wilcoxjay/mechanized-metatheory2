@@ -221,6 +221,8 @@ Module Type ABT.
   Parameter descend_0 : forall rho, descend 0 rho = rho.
   Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
 
+  Parameter descend_wf : forall n s rho, Forall (wf n) rho -> Forall (wf (s + n)) (descend s rho).
+
   Parameter subst_cons :
     forall e v rho,
       wf (S (length rho)) e ->
@@ -1497,6 +1499,35 @@ Module abt_util (SB : SYNTAX_BASIS).
       eapply Forall_impl; [|eassumption].
       intros.
       now rewrite <- wf_to_abt.
+  Qed.
+
+  Lemma descend_length :
+    forall n rho,
+      length (descend n rho) = n + length rho.
+  Proof.
+    intros n rho.
+    unfold descend.
+    now rewrite app_length, map_length, identity_subst_length.
+  Qed.
+
+  Lemma Forall_wf_to_abt :
+    forall n l,
+      Forall (wf n) l <-> Forall (A.wf n) (map to_abt l).
+  Proof.
+    intros n l.
+    rewrite Forall_map.
+    split; refine (@Forall_impl _ _ _ _ _); firstorder using wf_to_abt.
+  Qed.
+
+  Lemma descend_wf :
+    forall n s rho,
+      Forall (wf n) rho ->
+      Forall (wf (s + n)) (descend s rho).
+  Proof.
+    intros n s rho F.
+    rewrite Forall_wf_to_abt in *.
+    rewrite descend_to_abt_comm.
+    auto using A.descend_wf.
   Qed.
 
   Lemma descend_1 :
