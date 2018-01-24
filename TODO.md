@@ -1,0 +1,10 @@
+- add booleans to f
+- prove some consequnces of f_unary for existential types
+- add f_binary
+- prove f_binary sound for contextual equivalence
+- prove some consequnces of f_binary for existential types
+- do step-indexed versions of all these models (won't prove termination, but semantic safety)
+- do a language first-order state
+- in a binary model of a language with state, prove some nontrivial equivalences
+- do a language with recursive types
+- do a language with concurrency
