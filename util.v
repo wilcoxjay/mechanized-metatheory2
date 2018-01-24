@@ -94,7 +94,7 @@ Proof.
   induction 1; simpl; constructor; auto.
 Qed.
 
-Lemma Forall2_forall_suff_weak :
+Lemma Forall2_from_forall :
   forall A B (P : A -> B -> Prop) l1 l2,
     length l1 = length l2 ->
     (forall x y z,

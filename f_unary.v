@@ -324,7 +324,7 @@ Proof.
         eapply V_ext; [|apply Vv].
         constructor; [now intuition|].
         apply Forall2_map.
-        apply Forall2_forall_suff_weak; auto.
+        apply Forall2_from_forall; auto.
         intros.
         unfold type_basis.t in *.
         assert (y = z) by congruence.
@@ -343,7 +343,7 @@ Proof.
         eapply V_ext; [|apply Vv].
         constructor; [now intuition|].
         apply Forall2_map.
-        apply Forall2_forall_suff_weak; auto.
+        apply Forall2_from_forall; auto.
         intros.
         unfold type_basis.t in *.
         assert (y = z) by congruence.
@@ -365,7 +365,7 @@ Proof.
         eapply V_ext; [|apply Vv'].
         constructor; [now intuition|].
         apply Forall2_map.
-        apply Forall2_forall_suff_weak; auto.
+        apply Forall2_from_forall; auto.
         intros.
         unfold type_basis.t in *.
         assert (y = z) by congruence.
@@ -384,7 +384,7 @@ Proof.
         eapply V_ext; [|apply Vv'].
         constructor; [now intuition|].
         apply Forall2_map.
-        apply Forall2_forall_suff_weak; auto.
+        apply Forall2_from_forall; auto.
         intros.
         unfold type_basis.t in *.
         assert (y = z) by congruence.

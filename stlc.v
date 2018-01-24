@@ -253,7 +253,7 @@ Module has_type.
       constructor.
       + now constructor.
       + apply Forall2_map_l.
-        apply Forall2_forall_suff_weak.
+        apply Forall2_from_forall.
         * now erewrite Forall2_length by eauto.
         * intros.
           apply shift_cons.
