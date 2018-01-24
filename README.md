@@ -28,8 +28,8 @@ detail below.
 - `stlc_binary.v`: A binary logical relation for establishing
   contextual equivalence in STLC.
 - `f.v`: Syntax, operational semantics, and type system for System F
-  with universal and existential types (and functions). Again, uses the ABT
-  framework for substitution theorems.
+  with booleans, universal and existential types (and
+  functions). Again, uses the ABT framework for substitution theorems.
 - `f_unary.v`: A unary logical relation for proving termination of
   System F. Also contains some applications to proving "free theorems"
   for universal types.
