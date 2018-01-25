@@ -11,6 +11,10 @@ single, centralized ABT library that is parametrized by the operators
 in the language and their arity. This is described in slightly more
 detail below.
 
+## Build instructions
+
+    make
+
 ## Guide to files
 
 - `abt.v`: The abstract binding tree framework. Defines capture
