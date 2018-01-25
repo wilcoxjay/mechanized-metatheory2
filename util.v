@@ -312,6 +312,25 @@ Section Forall3.
 End Forall3.
 Hint Constructors Forall3.
 
+Lemma Forall3_map1 :
+  forall A A' B C (P : A -> B -> C -> Prop) (f : A' -> A) l1 l2 l3,
+    Forall3 (fun x => P (f x)) l1 l2 l3 ->
+    Forall3 P (List.map f l1) l2 l3
+.
+Proof.
+  induction 1; simpl; auto.
+Qed.
+
+Lemma Forall3_impl :
+  forall A B C (P Q : A -> B -> C -> Prop) l1 l2 l3,
+    (forall a b c, P a b c -> Q a b c) ->
+    Forall3 P l1 l2 l3 ->
+    Forall3 Q l1 l2 l3.
+Proof.
+  intros A B C P Q l1 l2 l3 H.
+  induction 1; simpl; auto.
+Qed.
+
 Lemma map_inj :
   forall A B (f : A -> B) l1 l2,
     (forall a1 a2, f a1 = f a2 -> a1 = a2) ->
