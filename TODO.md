@@ -1,5 +1,4 @@
 - prove some consequnces of f_unary for existential types
-- add f_binary
 - prove f_binary sound for contextual equivalence
 - prove some consequnces of f_binary for existential types
 - do step-indexed versions of all these models (won't prove termination, but semantic safety)

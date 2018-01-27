@@ -37,6 +37,7 @@ detail below.
 - `f_unary.v`: A unary logical relation for proving termination of
   System F. Also contains some applications to proving "free theorems"
   for universal types.
+- `f_binary.v`: A binary logical relation for System F.
 
 ## References
 
