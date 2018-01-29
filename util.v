@@ -358,3 +358,14 @@ Notation "[ /\ P1 , P2 & P3 ]" := (and3 P1 P2 P3) : type_scope.
 Notation "[ /\ P1 , P2 , P3 & P4 ]" := (and4 P1 P2 P3 P4) : type_scope.
 Notation "[ /\ P1 , P2 , P3 , P4 & P5 ]" := (and5 P1 P2 P3 P4 P5) : type_scope.
 
+Lemma nth_error_shift :
+  forall A (l1 l2 l3 : list A) n,
+    nth_error (l1 ++ l2 ++ l3) (if n <? length l1 then n else n + length l2) =
+    nth_error (l1 ++ l3) n.
+Proof.
+  intros A l1 l2 l3 n.
+  destruct (Nat.ltb_spec n (length l1)).
+  - now rewrite !nth_error_app1 by assumption.
+  - rewrite !nth_error_app2 by omega.
+    f_equal. omega.
+Qed.

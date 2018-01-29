@@ -339,4 +339,194 @@ Module abt_util (SB : SYNTAX_BASIS).
     rewrite map_shift_to_abt_comm.
     now rewrite A.descend_1.
   Qed.
+
+  Lemma shift_shift' :
+    forall c d e,
+      shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
+  Proof.
+    intros c d e.
+    apply to_abt_inj.
+    rewrite !shift_to_abt_comm.
+    apply A.shift_shift'.
+  Qed.
+
+  Lemma map_shift_map_shift' :
+    forall c d l,
+      map (shift 0 1) (map (shift c d) l) =
+      map (shift (S c) d) (map (shift 0 1) l).
+  Proof.
+    intros c d l.
+    rewrite !map_map.
+    apply map_ext.
+    auto using shift_shift'.
+  Qed.
+
+  Definition SIS d n := (map (shift 0 d) (identity_subst n)).
+  Lemma SIS_to_abt_comm :
+    forall d n,
+      map to_abt (SIS d n) = A.SIS d n.
+  Proof.
+    intros d n.
+    unfold SIS.
+    now rewrite map_shift_to_abt_comm, identity_subst_to_abt_comm.
+  Qed.
+
+  Lemma map_shift_identity_subst_split :
+    forall c d n,
+      c <= n ->
+      map (shift c d) (identity_subst n) =
+      identity_subst c ++ SIS (c + d) (n - c).
+  Proof.
+    intros c d n LE.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_app.
+    rewrite !map_shift_to_abt_comm.
+    rewrite !identity_subst_to_abt_comm, SIS_to_abt_comm.
+    now rewrite A.map_shift_identity_subst_split.
+  Qed.
+
+  Lemma subst_shift :
+    forall e rho1 rho2 rho3 n1 n2,
+      wf (List.length (rho1 ++ rho3)) e ->
+      List.length rho1 = n1 ->
+      List.length rho2 = n2 ->
+      subst (rho1 ++ rho2 ++ rho3) (shift n1 n2 e) =
+      subst (rho1 ++ rho3) e.
+  Proof.
+    intros e rho1 rho2 rho3 n1 n2 WF En1 En2. subst n1 n2.
+    apply to_abt_inj.
+    rewrite !subst_to_abt_comm, shift_to_abt_comm, !map_app.
+    pose proof (A.subst_shift (to_abt e) (map to_abt rho1)
+                              (map to_abt rho2) (map to_abt rho3)) as H.
+    rewrite !map_length in *.
+    rewrite H; auto.
+    apply wf_to_abt.
+    now rewrite !app_length, !map_length in *.
+  Qed.
+
+  Lemma shift_subst :
+    forall e c d rho,
+      wf (List.length rho) e ->
+      shift c d (subst rho e) =
+      subst (List.map (shift c d) rho) e.
+  Proof.
+    intros e c d rho WF.
+    apply to_abt_inj.
+    rewrite shift_to_abt_comm, !subst_to_abt_comm, !map_shift_to_abt_comm.
+    apply A.shift_subst.
+    rewrite map_length.
+    now apply wf_to_abt.
+  Qed.
+
+  Lemma identity_subst_app :
+    forall n1 n2,
+      identity_subst (n1 + n2) = identity_subst n1 ++ SIS n1 n2.
+  Proof.
+    intros n1 n2.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_app, !identity_subst_to_abt_comm,
+           SIS_to_abt_comm.
+    apply A.identity_subst_app.
+  Qed.
+
+  Lemma subst_extend_with_identity :
+    forall e rho n,
+      subst rho e = subst (rho ++ SIS (length rho) n) e.
+  Proof.
+    intros e rho n.
+    apply to_abt_inj.
+    rewrite !subst_to_abt_comm, map_app, SIS_to_abt_comm.
+    rewrite A.subst_extend_with_identity with (n := n).
+    now rewrite map_length.
+  Qed.
+
+  Lemma SIS_length :
+    forall d n,
+      length (SIS d n) = n.
+  Proof.
+    intros d n.
+    rewrite <- map_length with (f := to_abt).
+    rewrite SIS_to_abt_comm.
+    now rewrite A.SIS_length.
+  Qed.
+
+  Lemma wf_SIS : forall d n, Forall (wf (d + n)) (SIS d n).
+  Proof.
+    intros d n.
+    rewrite Forall_wf_to_abt.
+    rewrite SIS_to_abt_comm.
+    apply A.wf_SIS.
+  Qed.
+
+  Lemma SIS_merge :
+    forall n d1 d2,
+      map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
+  Proof.
+    intros n d1 d2.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_shift_to_abt_comm, !SIS_to_abt_comm.
+    now rewrite A.SIS_merge.
+  Qed.
+
+  Lemma SIS_merge' :
+    forall n d,
+      map (shift 0 1) (SIS d n) = SIS (S d) n.
+  Proof.
+    intros n d.
+    rewrite SIS_merge.
+    now rewrite Nat.add_1_r.
+  Qed.
+
+  Lemma SIS_0 : forall n, SIS 0 n = identity_subst n.
+  Proof.
+    intros n.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite SIS_to_abt_comm, identity_subst_to_abt_comm.
+    now rewrite A.SIS_0.
+  Qed.
+
+  Lemma SIS_app :
+    forall n1 n2 d,
+      SIS d (n1 + n2) = SIS d n1 ++ SIS (n1 + d) n2.
+  Proof.
+    intros n1 n2 d.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_app, !SIS_to_abt_comm.
+    now rewrite A.SIS_app.
+  Qed.
+
+  Lemma subst_shift_cons_identity_subst :
+    forall c d n e1 e2,
+      c <= n ->
+      wf (S n) e2 ->
+      subst (shift c d e1 :: identity_subst (d + n)) (shift (S c) d e2) =
+      subst (shift c d e1 :: map (shift c d) (identity_subst n)) e2.
+  Proof.
+    intros c d n e1 e2 LE WF.
+
+    replace (d + n) with (c + (d + (n - c))) by omega.
+    rewrite identity_subst_app.
+    rewrite SIS_app.
+    rewrite app_comm_cons.
+    rewrite subst_shift; simpl;
+      [| | auto using f_equal, identity_subst_length | auto using SIS_length].
+    + rewrite map_shift_identity_subst_split by assumption.
+      now rewrite Nat.add_comm.
+    + rewrite app_length, identity_subst_length, SIS_length.
+      now replace (c + (n - c)) with n by omega.
+  Qed.
+
+  Lemma wf_cons :
+    forall n e l,
+      wf (S n) e ->
+      Forall (wf n) l ->
+      Forall (wf (S n)) (e :: map (shift 0 1) l).
+  Proof.
+    auto using wf_map_shift'.
+  Qed.
 End abt_util.

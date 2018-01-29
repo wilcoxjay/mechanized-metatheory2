@@ -398,6 +398,112 @@ Module has_type.
     - now rewrite map_length in *.
     - now rewrite map_length in *.
   Qed.
+
+  Lemma shift :
+  forall n G1 G2 G3 e ty,
+    has_type.t n (G1 ++ G3) e ty ->
+    has_type.t n (G1 ++ G2 ++ G3) (expr.shift (length G1) (length G2) e) ty.
+  Proof.
+    intros n G1 G2 G3 e ty HT.
+    revert G2.
+    remember (G1 ++ G3) as G eqn:EG in *.
+    revert G1 G3 EG.
+    induction HT; intros G1 G3 EG G2; subst G; simpl; econstructor; eauto.
+    - now rewrite nth_error_shift.
+    - rewrite app_comm_cons.
+      now apply IHHT.
+    - specialize (IHHT (map (type.shift 0 1) G1) (map (type.shift 0 1) G3)
+                       (ltac:(auto using map_app)) (map (type.shift 0 1) G2)).
+      now rewrite !map_app, !map_length in *.
+    - specialize (IHHT2 (ty1 :: map (type.shift 0 1) G1) (map (type.shift 0 1) G3)
+                        ltac:(simpl; apply f_equal; apply map_app) (map (type.shift 0 1) G2)).
+      cbn[length] in *.
+      now rewrite !map_app, !map_length in *.
+  Qed.
+
+  Lemma shift' :
+  forall n G e ty ty',
+    has_type.t n G e ty ->
+    has_type.t n (ty' :: G) (expr.shift 0 1 e) ty.
+  Proof.
+    intros n G e ty ty' HT.
+    apply shift with (G1 := []) (G2 := [ty']) (G3 := G).
+    auto.
+  Qed.
+
+  Lemma tyshift :
+    forall n c d G e ty,
+      c <= n ->
+      Forall (type.wf n) G ->
+      has_type.t n G e ty ->
+      has_type.t (d + n) (map (type.shift c d) G) e (type.shift c d ty).
+  Proof.
+    intros n c d G e ty LE WFG HT.
+    revert c LE.
+    induction HT; intros c LE.
+    - constructor.
+      now rewrite nth_error_map, H.
+    - simpl in *. constructor; auto using type.wf_shift.
+    - econstructor; eauto.
+    - simpl. econstructor.
+      rewrite plus_n_Sm.
+      rewrite type.map_shift_map_shift'.
+      now auto using type.wf_map_shift' with *.
+    - simpl in *.
+      specialize (IHHT WFG c).
+
+      rewrite type.shift_subst
+      by (simpl; rewrite type.identity_subst_length;
+          apply t_type_wf in HT; auto).
+
+      simpl in *.
+      apply has_type.tyapp with (ty := type.shift c d ty) in IHHT;
+        [|now auto using type.wf_shift| assumption].
+
+      rewrite type.subst_shift_cons_identity_subst in IHHT; auto.
+      now apply t_type_wf in HT; [|assumption].
+    - simpl.
+      specialize (IHHT WFG c LE).
+      rewrite type.shift_subst in IHHT
+      by (simpl; rewrite type.identity_subst_length;
+          now eauto using t_type_wf, type.wf_subst_id_inv).
+      apply pack with (ty_rep := type.shift c d ty_rep); [now auto using type.wf_shift|].
+
+      rewrite type.subst_shift_cons_identity_subst; auto.
+      clear - HT WFG.
+      apply t_type_wf in HT; [|assumption].
+      apply type.wf_subst_inv in HT.
+      simpl in *.
+      rewrite type.identity_subst_length in *.
+      now rewrite Nat.max_r in * by omega.
+    - cbn[type.shift] in *.
+      assert (type.wf (S n) ty1) as WFty1 by now apply t_type_wf in HT1.
+      econstructor.
+      now apply IHHT1.
+
+      specialize (IHHT2 (type.wf_cons WFty1 WFG) (S c) ltac:(omega)).
+      rewrite Nat.add_succ_r in IHHT2.
+      cbn[map] in IHHT2.
+      rewrite type.map_shift_map_shift'.
+      apply IHHT2.
+
+      subst ty2.
+      now rewrite type.shift_shift'.
+    - constructor.
+    - constructor.
+    - constructor; eauto.
+  Qed.
+
+  Lemma tyshift' :
+    forall n G e ty,
+      Forall (type.wf n) G ->
+      has_type.t n G e ty ->
+      has_type.t (S n) (map (type.shift 0 1) G) e (type.shift 0 1 ty).
+  Proof.
+    intros n G e ty HT.
+    apply tyshift with (n := n) (d := 1); auto.
+    omega.
+  Qed.
 End has_type.
 
 Module value.

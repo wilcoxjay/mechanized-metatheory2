@@ -161,6 +161,8 @@ Module Type ABT.
     | S n => var 0 :: map (shift 0 1) (identity_subst n)
     end.
 
+  Definition SIS d n := (map (shift 0 d) (identity_subst n)).
+
   Definition descend (n : nat) (rho : list t) : list t :=
     identity_subst n ++ map (shift 0 n) rho.
 
@@ -207,6 +209,8 @@ Module Type ABT.
 
   Parameter shift_merge : forall e c d1 d2, shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
   Parameter shift_nop_d : forall e c, shift c 0 e = e.
+  Parameter shift_shift' : forall c d e,
+      shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
 
   Parameter subst_subst :
     forall e rho1 rho2,
@@ -217,6 +221,18 @@ Module Type ABT.
 
   Parameter subst_identity : forall e n, subst (identity_subst n) e = e.
   Parameter subst_shift_singleton : forall e e', wf 0 e -> subst [e'] (shift 0 1 e) = e.
+
+  Parameter subst_shift :
+    forall e rho1 rho2 rho3,
+      wf (List.length (rho1 ++ rho3)) e ->
+      subst (rho1 ++ rho2 ++ rho3) (shift (List.length rho1) (List.length rho2) e) =
+      subst (rho1 ++ rho3) e.
+
+  Parameter shift_subst :
+    forall e c d rho,
+      wf (List.length rho) e ->
+      shift c d (subst rho e) =
+      subst (List.map (shift c d) rho) e.
 
   Parameter descend_0 : forall rho, descend 0 rho = rho.
   Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
@@ -229,6 +245,38 @@ Module Type ABT.
       Forall (wf 0) rho ->
       subst [v] (subst (descend 1 rho) e) =
       subst (v :: rho) e.
+
+  Parameter map_shift_identity_subst_split :
+    forall c d n,
+      c <= n ->
+      map (shift c d) (identity_subst n) =
+      identity_subst c ++ SIS (c + d) (n - c).
+
+  Parameter identity_subst_app :
+    forall n1 n2,
+      identity_subst (n1 + n2) = identity_subst n1 ++ SIS n1 n2.
+
+  Parameter subst_extend_with_identity :
+    forall e rho n,
+      subst rho e = subst (rho ++ SIS (length rho) n) e.
+
+  Parameter SIS_length :
+    forall d n,
+      length (SIS d n) = n.
+
+  Parameter wf_SIS : forall d n, Forall (wf (d + n)) (SIS d n).
+
+  Parameter SIS_merge :
+    forall n d1 d2,
+      map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
+
+  Parameter SIS_0 :
+    forall n,
+      SIS 0 n = identity_subst n.
+
+  Parameter SIS_app :
+    forall n1 n2 d,
+      SIS d (n1 + n2) = SIS d n1 ++ SIS (n1 + d) n2.
 
   Module basis_util.
     Ltac prove_ws_to_abt :=
@@ -393,6 +441,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     | 0 => []
     | S n => var 0 :: map (shift 0 1) (identity_subst n)
     end.
+  Definition SIS d n := (map (shift 0 d) (identity_subst n)).
 
   Lemma identity_subst_length : forall n, length (identity_subst n) = n.
   Proof.
@@ -497,6 +546,26 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     eapply shift_nop; eauto.
   Qed.
 
+  Lemma shift_shift' :
+    forall c d e,
+      shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
+  Proof.
+    intros c d e.
+    rewrite shift_shift with (c2 := 0) by omega.
+    f_equal. omega.
+  Qed.
+
+  Lemma map_shift_map_shift' :
+    forall c d l,
+      map (shift 0 1) (map (shift c d) l) =
+      map (shift (S c) d) (map (shift 0 1) l).
+  Proof.
+    intros c d l.
+    rewrite !map_map.
+    apply map_ext.
+    auto using shift_shift'.
+  Qed.
+
   Lemma shift_identity_subst :
     forall n c d,
       n <= c ->
@@ -509,11 +578,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
         omega.
       + destruct c; [omega|].
         rewrite <- IHn with (c := c) (d := d) at 2 by omega.
-        rewrite !map_map.
-        apply map_ext.
-        intros e.
-        rewrite shift_shift with (c2 := 0) by omega.
-        f_equal. omega.
+        auto using map_shift_map_shift'.
   Qed.
 
   Lemma descend_shift :
@@ -595,14 +660,13 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
                          (shift_binders (List.length rho1) (List.length rho2) bs) =
            subst_binders (rho1 ++ rho3) bs);
       simpl; intros rho1 rho2 rho3 WF; fold subst_binders shift_binders wf_binders in *;
-        f_equal; intuition; autorewrite with list in *.
-    - do_ltb.
-      + now rewrite !nth_error_app1 by assumption.
-      + rewrite !nth_error_app2 by omega.
-        do_app2_minus.
-        do_nth_error_Some.
-        break_match; intuition.
-    - erewrite <- IHe.
+        f_equal; intuition.
+    - rewrite nth_error_shift.
+      do_nth_error_Some.
+      break_match; auto.
+      intuition.
+    - autorewrite with list in *.
+      erewrite <- IHe.
       now f_equal; autorewrite with list.
       now autorewrite with list; rewrite plus_assoc in *.
   Qed.
@@ -633,8 +697,6 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     repeat do_ltb; omega.
   Qed.
 
-  Notation SIS d n := (map (shift 0 d) (identity_subst n)).
-
   Lemma shift_merge :
     forall e c d1 d2,
       shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
@@ -655,6 +717,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     forall n d1 d2,
       map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
   Proof.
+    unfold SIS.
     intros.
     rewrite !map_map.
     apply map_ext.
@@ -664,6 +727,28 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     omega.
   Qed.
 
+  Lemma SIS_unroll :
+    forall n d, SIS d (S n) = var d :: SIS (S d) n.
+  Proof.
+    unfold SIS.
+    intros.
+    simpl.
+    fold (SIS 1 n).
+    now rewrite SIS_merge.
+  Qed.
+
+  Lemma SIS_unroll_r :
+    forall n d, SIS d (S n) = SIS d n ++ [var (d + n)].
+  Proof.
+    induction n; intros.
+    - unfold SIS. simpl. do 2 f_equal. omega.
+    - rewrite !SIS_unroll with (d := d).
+      rewrite IHn.
+      simpl.
+      repeat f_equal.
+      omega.
+  Qed.
+
   Lemma subst_identity_subst :
     forall n rho1 rho2,
       map (subst (rho1 ++ SIS (length rho1) n ++ rho2)) (SIS (length rho1) n) =
@@ -671,10 +756,11 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
   Proof.
     induction n; simpl; intros rho1 rho2.
     - reflexivity.
-    - f_equal.
+    - rewrite SIS_unroll. f_equal.
       + rewrite nth_error_app2 by omega.
         now rewrite minus_diag.
-      + rewrite SIS_merge.
+      + fold (SIS 1 n).
+        rewrite SIS_merge.
         specialize (IHn (rho1 ++ [var (length rho1)]) rho2).
         autorewrite with list in *.
         simpl in *.
@@ -686,6 +772,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     forall n,
       SIS 0 n = identity_subst n.
   Proof.
+    unfold SIS.
     intros.
     erewrite map_ext.
     now rewrite map_id.
@@ -909,9 +996,11 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
       nth_error (SIS s n) x = Some y ->
       y = var (s + x).
   Proof.
+    unfold SIS.
     induction n; intros s x y NE; destruct x; simpl in *; try congruence.
     - rewrite Nat.add_0_r. congruence.
-    - rewrite SIS_merge in *.
+    - fold (SIS 1 n) in *. rewrite SIS_merge in *.
+      unfold SIS in *.
       apply IHn in NE.
       now rewrite Nat.add_succ_r, Nat.add_1_l, Nat.add_succ_l in *.
   Qed.
@@ -924,26 +1013,6 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     intros n x y.
     rewrite <- SIS_0.
     apply nth_error_SIS.
-  Qed.
-
-  Lemma SIS_unroll :
-    forall n d, SIS d (S n) = var d :: SIS (S d) n.
-  Proof.
-    intros.
-    simpl.
-    now rewrite SIS_merge.
-  Qed.
-
-  Lemma SIS_unroll_r :
-    forall n d, SIS d (S n) = SIS d n ++ [var (d + n)].
-  Proof.
-    induction n; intros.
-    - simpl. do 2 f_equal. omega.
-    - rewrite !SIS_unroll with (d := d).
-      rewrite IHn.
-      simpl.
-      repeat f_equal.
-      omega.
   Qed.
 
   Lemma identity_subst_unroll_r :
@@ -965,8 +1034,8 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     revert s.
     induction n; simpl; intros s.
     - now rewrite app_nil_r.
-    - rewrite SIS_merge.
-      specialize (IHn (S s)).
+    - fold (SIS 1 n). rewrite SIS_merge.
+      specialize (IHn (S s)). unfold SIS.
       rewrite identity_subst_unroll_r in *.
       rewrite app_ass in IHn.
       cbn [app] in IHn.
@@ -1101,6 +1170,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     forall n d,
       Forall ws (SIS d n).
   Proof.
+    unfold SIS.
     induction n; simpl; intros d; constructor.
     - exact I.
     - rewrite map_map.
@@ -1163,13 +1233,14 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     forall rho1 rho2,
       map (subst (rho1 ++ rho2)) (SIS (length rho1) (length rho2)) = rho2.
   Proof.
+    unfold SIS.
     intros rho1 rho2. revert rho1.
     induction rho2; simpl; intros rho1.
     - reflexivity.
     - f_equal.
       + rewrite nth_error_app2 by omega.
         now rewrite Nat.sub_diag.
-      + rewrite SIS_merge.
+      + fold (SIS 1 (length rho2)). rewrite SIS_merge. unfold SIS.
         specialize (IHrho2 (rho1 ++ [a])).
         autorewrite with list in *.
         simpl in *.
@@ -1186,7 +1257,7 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     now rewrite SIS_0 in *.
   Qed.
 
-  Lemma subst_extend_SIS :
+  Lemma subst_extend_with_identity :
     forall e rho n,
       subst rho e = subst (rho ++ SIS (length rho) n) e.
   Proof.
@@ -1264,6 +1335,113 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
   Proof.
     intros e v rho WF F.
     apply subst_subst_descend with (rho1 := [v]); auto.
+  Qed.
+
+  Lemma map_shift_SIS_big_c :
+    forall n d1 d2 c,
+      c <= d1 ->
+      map (shift c d2) (SIS d1 n) =
+      SIS (d1 + d2) n.
+  Proof.
+    induction n; intros d1 d2 c LE.
+    - reflexivity.
+    - rewrite !SIS_unroll.
+      cbn [map].
+      f_equal.
+      + simpl.
+        destruct (Nat.ltb_spec d1 c); [omega|reflexivity].
+      + rewrite IHn by omega.
+        reflexivity.
+  Qed.
+
+  Lemma map_shift_SIS_split :
+    forall n d1 d2 c,
+      c <= n + d1 ->
+      map (shift c d2) (SIS d1 n) =
+      SIS d1 (c - d1) ++ SIS (d1 + (c - d1) + d2) (n - (c - d1)).
+  Proof.
+    induction n; intros d1 d2 c LE.
+    - replace (c - d1) with 0 by omega.
+      reflexivity.
+    - rewrite SIS_unroll.
+      cbn[map].
+      cbn[shift].
+      destruct (Nat.ltb_spec d1 c).
+      + destruct c as [|c]; [omega|].
+        rewrite Nat.sub_succ_l by omega.
+        cbn[Nat.sub].
+        rewrite SIS_unroll.
+        cbn[app].
+        f_equal.
+        rewrite IHn by omega.
+        simpl.
+        repeat f_equal.
+        omega.
+      + rewrite map_shift_SIS_big_c by omega.
+        replace (c - d1) with 0 by omega.
+        rewrite <- SIS_unroll.
+        simpl.
+        f_equal.
+        omega.
+  Qed.
+
+  Lemma map_shift_identity_subst_split :
+    forall c d n,
+      c <= n ->
+      map (shift c d) (identity_subst n) =
+      identity_subst c ++ SIS (c + d) (n - c).
+  Proof.
+    intros c d n LE.
+    pose proof (@map_shift_SIS_split n 0 d c) as H.
+    rewrite Nat.sub_0_r in *.
+    rewrite !SIS_0 in *.
+    rewrite H by omega.
+    f_equal.
+  Qed.
+
+  Lemma SIS_app :
+    forall n1 n2 d,
+      SIS d (n1 + n2) = SIS d n1 ++ SIS (n1 + d) n2.
+  Proof.
+    induction n1; intros n2 d.
+    - reflexivity.
+    - cbn[plus].
+      rewrite !SIS_unroll.
+      cbn[app].
+      f_equal.
+      rewrite IHn1.
+      f_equal.
+      f_equal.
+      f_equal.
+      omega.
+  Qed.
+
+  Lemma identity_subst_app :
+    forall n1 n2,
+      identity_subst (n1 + n2) = identity_subst n1 ++ map (shift 0 n1) (identity_subst n2).
+  Proof.
+    intros.
+    pose proof SIS_app n1 n2 0 as H.
+    rewrite !SIS_0 in *.
+    now rewrite Nat.add_0_r in *.
+  Qed.
+
+  Lemma SIS_length :
+    forall d n,
+      length (SIS d n) = n.
+  Proof.
+    intros d n.
+    unfold SIS.
+    now rewrite map_length, identity_subst_length.
+  Qed.
+
+  Lemma wf_SIS : forall d n, Forall (wf (d + n)) (SIS d n).
+  Proof.
+    intros d n.
+    unfold SIS.
+    rewrite Forall_map.
+    eapply Forall_impl; [| apply wf_identity_subst].
+    auto using wf_shift.
   Qed.
 
   Module basis_util.
