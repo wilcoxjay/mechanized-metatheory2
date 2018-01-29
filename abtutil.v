@@ -529,4 +529,14 @@ Module abt_util (SB : SYNTAX_BASIS).
   Proof.
     auto using wf_map_shift'.
   Qed.
+
+  Lemma subst_shift_cons :
+    forall e e' g,
+      wf (length g) e ->
+      subst (e' :: g) (shift 0 1 e) = subst g e.
+  Proof.
+    intros.
+    pose proof @subst_shift e [] [e'] g.
+    auto.
+  Qed.
 End abt_util.

@@ -221,6 +221,10 @@ Module Type ABT.
 
   Parameter subst_identity : forall e n, subst (identity_subst n) e = e.
   Parameter subst_shift_singleton : forall e e', wf 0 e -> subst [e'] (shift 0 1 e) = e.
+  Parameter subst_shift_cons :
+    forall e e' g,
+      wf (length g) e ->
+      subst (e' :: g) (shift 0 1 e) = subst g e.
 
   Parameter subst_shift :
     forall e rho1 rho2 rho3,
