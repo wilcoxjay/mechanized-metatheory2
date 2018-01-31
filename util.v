@@ -353,10 +353,23 @@ Inductive and4 (P1 P2 P3 P4 : Prop) : Prop :=
 Inductive and5 (P1 P2 P3 P4 P5 : Prop) : Prop :=
   And5 : P1 -> P2 -> P3 -> P4 -> P5 -> and5 P1 P2 P3 P4 P5.
 
+Inductive or3 (P1 P2 P3 : Prop) : Prop := Or31 : P1 -> or3 P1 P2 P3
+                                  | Or32 : P2 -> or3 P1 P2 P3
+                                  | Or33 : P3 -> or3 P1 P2 P3.
+
+Inductive or4 (P1 P2 P3 P4 : Prop) : Prop := Or41 : P1 -> or4 P1 P2 P3 P4
+                                     | Or42 : P2 -> or4 P1 P2 P3 P4
+                                     | Or43 : P3 -> or4 P1 P2 P3 P4
+                                     | Or44 : P4 -> or4 P1 P2 P3 P4.
+
 Notation "[ /\ P1 & P2 ]" := (and P1 P2) (only parsing) : type_scope.
 Notation "[ /\ P1 , P2 & P3 ]" := (and3 P1 P2 P3) : type_scope.
 Notation "[ /\ P1 , P2 , P3 & P4 ]" := (and4 P1 P2 P3 P4) : type_scope.
 Notation "[ /\ P1 , P2 , P3 , P4 & P5 ]" := (and5 P1 P2 P3 P4 P5) : type_scope.
+
+Notation "[ \/ P1 | P2 ]" := (or P1 P2) (only parsing) : type_scope.
+Notation "[ \/ P1 , P2 | P3 ]" := (or3 P1 P2 P3) : type_scope.
+Notation "[ \/ P1 , P2 , P3 | P4 ]" := (or4 P1 P2 P3 P4) : type_scope.
 
 Lemma nth_error_shift :
   forall A (l1 l2 l3 : list A) n,
@@ -369,3 +382,5 @@ Proof.
   - rewrite !nth_error_app2 by omega.
     f_equal. omega.
 Qed.
+
+
