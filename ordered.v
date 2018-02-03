@@ -19,21 +19,16 @@ Lemma app_inv :
     | exists W,
       [/\ xs' = xs ++ W
        & zs = W ++ zs']].
-Admitted.
-
-Lemma app_middle_inv :
-  forall A y y' (xs zs xs' zs' : list A),
-    xs ++ y :: zs = xs' ++ y' :: zs' ->
-    [\/ [/\ xs = xs'
-        , y = y'
-          & zs = zs']
-     , exists W,
-        [/\ xs = xs' ++ y' :: W
-         & zs' = W ++ y :: zs]
-    | exists W,
-      [/\ xs' = xs ++ y :: W
-       & zs = W ++ y' :: zs']].
-Admitted.
+Proof.
+  induction xs; simpl; intros zs xs' zs' H.
+  - subst. eauto.
+  - destruct xs'; simpl in *.
+    + destruct zs'; invc H.
+      eauto.
+    + invc H.
+      apply IHxs in H2.
+      destruct H2 as [[W [? ?]]|[W [? ?]]]; subst; eauto.
+Qed.
 
 
 Lemma app_singleton_inv :
@@ -78,6 +73,32 @@ Proof.
     intuition; subst; auto.
     right. exists []. auto.
   - right. exists W1. auto.
+Qed.
+
+Lemma app_middle_inv :
+  forall A y y' (xs zs xs' zs' : list A),
+    xs ++ y :: zs = xs' ++ y' :: zs' ->
+    [\/ [/\ xs = xs'
+        , y = y'
+          & zs = zs']
+     , exists W,
+        [/\ xs = xs' ++ y' :: W
+         & zs' = W ++ y :: zs]
+    | exists W,
+      [/\ xs' = xs ++ y :: W
+       & zs = W ++ y' :: zs']].
+Proof.
+  intros A y y' xs zs xs' zs' H.
+  apply app_inv in H.
+  destruct H as [[W [? ?]]|[W [? ?]]]; subst.
+  - apply app_cons_inv in H0.
+    destruct H0 as [[? ?]|[W' [? ?]]]; subst.
+    + invc H0. constructor 1. rewrite app_nil_r. split; auto.
+    + constructor 2. exists W'. split; auto.
+  - apply app_cons_inv in H0.
+    destruct H0 as [[? ?]|[W' [? ?]]]; subst.
+    + invc H0. constructor 1. rewrite app_nil_r. split; auto.
+    + constructor 3. exists W'. split; auto.
 Qed.
 
 Module prop.
