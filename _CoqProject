@@ -8,4 +8,4 @@ stlc_binary.v
 f.v
 f_unary.v
 f_binary.v
-ordered.v
+ordered_sequent.v
