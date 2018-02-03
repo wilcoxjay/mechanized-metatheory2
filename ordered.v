@@ -1,106 +1,6 @@
 From mm Require Import util.
 Set Implicit Arguments.
 
-(*
-          xs     |   zs
-    ----------------------
-      xs' |     zs'
-
-   xs = xs' ++ W
-   zs' = W ++ zs
- *)
-
-Lemma app_inv :
-  forall A (xs zs xs' zs' : list A),
-    xs ++ zs = xs' ++ zs' ->
-    [\/ exists W,
-        [/\ xs = xs' ++ W
-         & zs' = W ++ zs]
-    | exists W,
-      [/\ xs' = xs ++ W
-       & zs = W ++ zs']].
-Proof.
-  induction xs; simpl; intros zs xs' zs' H.
-  - subst. eauto.
-  - destruct xs'; simpl in *.
-    + destruct zs'; invc H.
-      eauto.
-    + invc H.
-      apply IHxs in H2.
-      destruct H2 as [[W [? ?]]|[W [? ?]]]; subst; eauto.
-Qed.
-
-
-Lemma app_singleton_inv :
-  forall A (x : A) xs ys,
-    [x] = xs ++ ys ->
-    [\/ xs = [x] /\ ys = []
-    | xs = [] /\ ys = [x]].
-Proof.
-  intros A x xs ys H.
-  destruct xs; auto.
-  destruct xs.
-  destruct ys; try discriminate.
-  auto.
-  discriminate.
-Qed.
-
-Lemma app_singleton_middle_inv :
-  forall A (x x' : A) xs ys,
-    [x] = xs ++ x' :: ys ->
-    [/\ x = x'
-     , xs = []
-     & ys = []].
-Proof.
-  intros A x x' xs ys H.
-  apply app_singleton_inv in H.
-  destruct H as [[? ?]|[? ?]]; subst.
-  - discriminate.
-  - invc H0. split; auto.
-Qed.
-
-Lemma app_cons_inv :
-  forall A (x : A) ys xs' ys',
-    x :: ys = xs' ++ ys' ->
-    [\/ [/\ [] = xs' & ys' = x :: ys]
-    | exists W, [/\ xs' = [x] ++ W & ys = W ++ ys']].
-Proof.
-  intros A x ys xs' ys' H.
-  replace (x :: ys) with ([x] ++ ys) in H by reflexivity.
-  apply app_inv in H.
-  destruct H as [[W1 [? ?]] | [W1 [? ?]]]; subst; firstorder.
-  - apply app_singleton_inv in H.
-    intuition; subst; auto.
-    right. exists []. auto.
-  - right. exists W1. auto.
-Qed.
-
-Lemma app_middle_inv :
-  forall A y y' (xs zs xs' zs' : list A),
-    xs ++ y :: zs = xs' ++ y' :: zs' ->
-    [\/ [/\ xs = xs'
-        , y = y'
-          & zs = zs']
-     , exists W,
-        [/\ xs = xs' ++ y' :: W
-         & zs' = W ++ y :: zs]
-    | exists W,
-      [/\ xs' = xs ++ y :: W
-       & zs = W ++ y' :: zs']].
-Proof.
-  intros A y y' xs zs xs' zs' H.
-  apply app_inv in H.
-  destruct H as [[W [? ?]]|[W [? ?]]]; subst.
-  - apply app_cons_inv in H0.
-    destruct H0 as [[? ?]|[W' [? ?]]]; subst.
-    + invc H0. constructor 1. rewrite app_nil_r. split; auto.
-    + constructor 2. exists W'. split; auto.
-  - apply app_cons_inv in H0.
-    destruct H0 as [[? ?]|[W' [? ?]]]; subst.
-    + invc H0. constructor 1. rewrite app_nil_r. split; auto.
-    + constructor 3. exists W'. split; auto.
-Qed.
-
 Module prop.
   Inductive t :=
   | under : t -> t -> t
@@ -119,7 +19,6 @@ Module prop.
     | one => 1
     | under A1 A2 => S (size A1 + size A2)
     end.
-
 End prop.
 
 Module expr.
@@ -163,7 +62,6 @@ Module cf_sequent.
   Lemma cut_admissible' :
     forall n e1 e2 A Ω Ω_L Ω_R C,
       prop.size A + expr.size e1 + expr.size e2 < n ->
-
       t Ω e1 A ->
       t (Ω_L ++ A :: Ω_R) e2 C ->
       exists e, t (Ω_L ++ Ω ++ Ω_R) e C /\ expr.size e <= expr.size e1 + expr.size e2.
