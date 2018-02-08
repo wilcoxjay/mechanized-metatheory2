@@ -107,7 +107,7 @@ Module NatOrderedType : OrderedType with Definition t := nat.
   Print Assumptions lt_irrelevant.
 End NatOrderedType.
 
-Module SortedMap (K : OrderedType) : MAP.
+Module SortedMap (K : OrderedType) : MAP with Definition key := K.t.
   Definition key := K.t.
 
   Definition key_eq_dec := K.eq_dec.
@@ -734,3 +734,5 @@ Module SortedMap (K : OrderedType) : MAP.
     apply Internal.wf_irrelevant.
   Qed.
 End SortedMap.
+
+Module NatMap := SortedMap NatOrderedType.
