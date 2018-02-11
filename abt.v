@@ -240,6 +240,7 @@ Module Type ABT.
 
   Parameter descend_0 : forall rho, descend 0 rho = rho.
   Parameter descend_1 : forall rho, descend 1 rho = var 0 :: map (shift 0 1) rho.
+  Parameter descend_2 : forall rho, descend 2 rho = var 0 :: var 1 :: map (shift 0 2) rho.
 
   Parameter descend_wf : forall n s rho, Forall (wf n) rho -> Forall (wf (s + n)) (descend s rho).
 
@@ -312,7 +313,7 @@ Module Type ABT.
 
     Ltac prove_subst_to_abt_comm t mstac :=
       unfold t;
-      intros e; induction e; simpl; intros rho; rewrite ?descend_0, ?descend_1;
+      intros e; induction e; simpl; intros rho; rewrite ?descend_0, ?descend_1, ?descend_2;
       repeat match goal with
       | [ IH : forall _, _ = _ |- _ ] => rewrite IH; clear IH
       end;
@@ -1112,7 +1113,12 @@ Module abt (O : OPERATOR) : ABT with Module O := O.
     forall rho,
       descend 1 rho = var 0 :: map (shift 0 1) rho.
   Proof. reflexivity. Qed.
-   
+
+  Lemma descend_2 :
+    forall rho,
+      descend 2 rho = var 0 :: var 1 :: map (shift 0 2) rho.
+  Proof. reflexivity. Qed.
+
   Fixpoint ws (e : t) {struct e} :=
     let fix go_list (a : arity.t) (bs : list binder) {struct bs} :=
         match a, bs with

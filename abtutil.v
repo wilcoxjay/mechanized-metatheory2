@@ -340,6 +340,20 @@ Module abt_util (SB : SYNTAX_BASIS).
     now rewrite A.descend_1.
   Qed.
 
+  Lemma descend_2 :
+    forall rho,
+      descend 2 rho = var 0 :: var 1 :: map (shift 0 2) rho.
+  Proof.
+    intros rho.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite descend_to_abt_comm.
+    simpl.
+    rewrite A.descend_2.
+    rewrite !var_to_abt.
+    now rewrite map_shift_to_abt_comm.
+  Qed.
+
   Lemma shift_shift' :
     forall c d e,
       shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
