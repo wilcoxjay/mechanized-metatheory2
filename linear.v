@@ -262,84 +262,152 @@ Proof.
   destruct Nat.eq_dec; auto.
 Qed.
 
-Module has_type.
-  Inductive t : list (option type.t) -> expr.t -> type.t -> list (option type.t) -> Prop :=
-  | var : forall G x ty,
-      List.nth_error G x = Some (Some ty) ->
-      t G (expr.var x) ty (nth_set G x None)
-  | abs : forall G e ty1 ty2 G',
-      t (Some ty1 :: G) e ty2 (None :: G') ->
-      t G (expr.abs e) (type.lolli ty1 ty2) G'
-  | app : forall G G' G'' e1 e2 ty1 ty2,
-      t G e1 (type.lolli ty1 ty2) G' ->
-      t G' e2 ty1 G'' ->
-      t G (expr.app e1 e2) ty2 G''
-  | both : forall G G' G'' e1 e2 ty1 ty2,
-      t G e1 ty1 G' ->
-      t G' e2 ty2 G'' ->
-      t G (expr.both e1 e2) (type.tensor ty1 ty2) G''
-  | let_pair : forall G G' G'' e1 e2 ty1 ty2 ty,
-      t G e1 (type.tensor ty1 ty2) G' ->
-      t (Some ty2 :: Some ty1 :: G') e2 ty (None :: None :: G'') ->
-      t G (expr.let_pair e1 e2) ty G''
-  | oneof : forall G G' e1 e2 ty1 ty2,
-      t G e1 ty1 G' ->
-      t G e2 ty2 G' ->
-      t G (expr.oneof e1 e2) (type.uchoose ty1 ty2) G'
-  | fst : forall G G' e ty1 ty2,
-      t G e (type.uchoose ty1 ty2) G' ->
-      t G (expr.fst e) ty1 G'
-  | snd : forall G G' e ty1 ty2,
-      t G e (type.uchoose ty1 ty2) G' ->
-      t G (expr.snd e) ty2 G'
-  | inl : forall G G' e ty1 ty2,
-      t G e ty1 G' ->
-      t G (expr.inl e) (type.ichoose ty1 ty2) G'
-  | inr : forall G G' e ty1 ty2,
-      t G e ty2 G' ->
-      t G (expr.inr e) (type.ichoose ty1 ty2) G'
-  | case : forall G G' G'' e e1 e2 ty1 ty2 ty,
-      t G e (type.ichoose ty1 ty2) G' ->
-      t (Some ty1 :: G') e1 ty (None :: G'') ->
-      t (Some ty2 :: G') e2 ty (None :: G'') ->
-      t G (expr.case e e1 e2) ty G''
-  | tt : forall G,
-      t G expr.tt type.one G
-  | let_tt : forall G G' G'' e1 e2 ty,
-      t G e1 type.one G' ->
-      t G' e2 ty G'' ->
+Fixpoint join (G1 G2 : list (option type.t)) : option (list (option type.t)) :=
+  match G1, G2 with
+  | [], [] => Some []
+  | g1 :: G1, g2 :: G2 =>
+    match g1, g2, join G1 G2 with
+    | Some ty, None, Some G => Some (Some ty :: G)
+    | None, Some ty, Some G => Some (Some ty :: G)
+    | None, None, Some G => Some (None :: G)
+    | _, _, _ => None
+    end
+  | _, _ => None
+  end.
 
-      t G (expr.let_tt e1 e2) ty G''
+Lemma join_nil :
+  join [] [] = Some [].
+Proof.
+  reflexivity.
+Qed.
+Hint Resolve join_nil.
+
+Lemma join_nil_inv :
+  forall G1 G2,
+    join G1 G2 = Some [] ->
+    G1 = [] /\ G2 = [].
+Proof.
+  destruct G1, G2; simpl; try discriminate.
+  - intuition congruence.
+  - repeat break_match; discriminate.
+Qed.
+
+Fixpoint empty (G : list (option type.t)) : Prop :=
+  match G with
+  | [] => True
+  | None :: G => empty G
+  | _ => False
+  end.
+
+Fixpoint singleton (x : nat) (ty : type.t) (G : list (option type.t)) {struct G} : Prop :=
+  match x, G with
+  | 0, Some ty' :: G => ty = ty' /\ empty G
+  | S x, None :: G => singleton x ty G
+  | _, _ => False
+  end.
+
+Lemma singleton_nth_error1 :
+  forall x ty G,
+    singleton x ty G ->
+    List.nth_error G x = Some (Some ty).
+Admitted.
+
+Lemma singleton_nth_error2 :
+  forall x ty G,
+    singleton x ty G ->
+    forall y,
+      y < List.length G ->
+      x <> y ->
+      List.nth_error G y = Some None.
+Admitted.
+
+Fixpoint big_join
+         (acc : list (option type.t))
+         (Gs : list (list (option type.t))) : option (list (option type.t)) :=
+  match Gs with
+  | [] => Some acc
+  | G1 :: Gs =>
+    match join acc G1 with
+    | None => None
+    | Some G1' => big_join G1' Gs
+    end
+  end.
+
+Ltac break_join :=
+ match goal with
+ | [ H : join _ _ = Some [] |- _ ] =>
+   apply join_nil_inv in H;
+   destruct H as [? ?]; subst
+ end.
+
+Module has_type.
+  Inductive t : list (option type.t) -> expr.t -> type.t -> Prop :=
+  | var : forall G x ty,
+      singleton x ty G ->
+      t G (expr.var x) ty
+  | abs : forall G e ty1 ty2 ,
+      t (Some ty1 :: G) e ty2 ->
+      t G (expr.abs e) (type.lolli ty1 ty2)
+  | app : forall G G1 G2 e1 e2 ty1 ty2,
+      join G1 G2 = Some G ->
+      t G1 e1 (type.lolli ty1 ty2) ->
+      t G2 e2 ty1 ->
+      t G (expr.app e1 e2) ty2
+  | both : forall G G1 G2 e1 e2 ty1 ty2,
+      join G1 G2 = Some G ->
+      t G1 e1 ty1 ->
+      t G2 e2 ty2 ->
+      t G (expr.both e1 e2) (type.tensor ty1 ty2)
+  | let_pair : forall G G1 G2 e1 e2 ty1 ty2 ty,
+      join G1 G2 = Some G ->
+      t G1 e1 (type.tensor ty1 ty2) ->
+      t (Some ty2 :: Some ty1 :: G2) e2 ty ->
+      t G (expr.let_pair e1 e2) ty
+  | oneof : forall G e1 e2 ty1 ty2,
+      t G e1 ty1 ->
+      t G e2 ty2 ->
+      t G (expr.oneof e1 e2) (type.uchoose ty1 ty2)
+  | fst : forall G e ty1 ty2,
+      t G e (type.uchoose ty1 ty2) ->
+      t G (expr.fst e) ty1
+  | snd : forall G e ty1 ty2,
+      t G e (type.uchoose ty1 ty2) ->
+      t G (expr.snd e) ty2
+  | inl : forall G e ty1 ty2,
+      t G e ty1 ->
+      t G (expr.inl e) (type.ichoose ty1 ty2)
+  | inr : forall G e ty1 ty2,
+      t G e ty2 ->
+      t G (expr.inr e) (type.ichoose ty1 ty2)
+  | case : forall G G1 G2 e e1 e2 ty1 ty2 ty,
+      join G1 G2 = Some G ->
+      t G1 e (type.ichoose ty1 ty2) ->
+      t (Some ty1 :: G2) e1 ty ->
+      t (Some ty2 :: G2) e2 ty ->
+      t G (expr.case e e1 e2) ty
+  | tt : forall G,
+      empty G ->
+      t G expr.tt type.one
+  | let_tt : forall G G1 G2 e1 e2 ty,
+      join G1 G2 = Some G ->
+      t G1 e1 type.one ->
+      t G2 e2 ty ->
+      t G (expr.let_tt e1 e2) ty
   .
 
-  Lemma length :
-    forall G e ty G',
-      t G e ty G' ->
-      length G = length G'.
-  Proof.
-    induction 1; simpl in *; try congruence.
-    now rewrite nth_set_length.
-  Qed.
-
-  Lemma subctx :
-    forall G e ty G',
-      t G e ty G' ->
-      forall n tyn,
-        nth_error G' n = Some (Some tyn) ->
-        nth_error G n = Some (Some tyn).
-  Proof.
-    induction 1; intros n tyn HG'; simpl in *; auto.
-    - rewrite nth_error_nth_set in HG' by (rewrite <- nth_error_Some; congruence).
-      break_match; [discriminate|assumption].
-    - now apply IHt with (n := S n).
-    - apply IHt1.
-      now apply IHt2 with (n := (S (S n))).
-    - apply IHt1.
-      now apply IHt2 with (n := (S n)).
-  Qed.
-
+  Lemma subst :
+    forall G e ty,
+      has_type.t G e ty ->
+      forall G' Gs rho,
+        Forall3 (fun G e oty => match oty with
+                             | None => True
+                             | Some ty => has_type.t G e ty
+                             end)
+                Gs rho G ->
+        big_join (List.repeat None (List.length G')) Gs = Some G' ->
+        has_type.t G' (expr.subst rho e) ty.
+  Admitted.
 End has_type.
-
 
 Module value.
   Inductive t : expr.t -> Prop :=
@@ -476,17 +544,18 @@ Module step.
 End step.
 
 Lemma preservation :
-  forall G e ty G',
-    has_type.t G e ty G' ->
+  forall G e ty,
+    has_type.t G e ty ->
     G = [] ->
-    G' = [] ->
     forall e',
       step.t e e' ->
-      has_type.t [] e' ty [].
+      has_type.t [] e' ty.
 Proof.
-  induction 1; intros ? ? e' Step; subst; invc Step.
-  - assert (G' = [])
-      by (rewrite <- length_zero_iff_nil;
-          now erewrite <- has_type.length by eauto).
-    subst G'.
-Admitted.
+  induction 1; intros ? e' Step; subst; invc Step; try break_join;
+    try solve [try econstructor; eauto];
+    match goal with
+    | [ H : has_type.t _ (_ _) _ |- _ ] => invc H
+    end;
+    try break_join;
+    eauto using has_type.subst.
+Qed.
