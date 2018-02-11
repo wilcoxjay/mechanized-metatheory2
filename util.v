@@ -321,6 +321,15 @@ Proof.
   induction 1; simpl; auto.
 Qed.
 
+Lemma Forall3_map2 :
+  forall A B B' C (P : A -> B -> C -> Prop) (f : B' -> B) l1 l2 l3,
+    Forall3 (fun x y => P x (f y)) l1 l2 l3 ->
+    Forall3 P l1 (List.map f l2) l3
+.
+Proof.
+  induction 1; simpl; auto.
+Qed.
+
 Lemma Forall3_impl :
   forall A B C (P Q : A -> B -> C -> Prop) l1 l2 l3,
     (forall a b c, P a b c -> Q a b c) ->

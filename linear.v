@@ -292,16 +292,48 @@ Proof.
   - repeat break_match; discriminate.
 Qed.
 
-Fixpoint empty (G : list (option type.t)) : Prop :=
+Definition empty n : list (option type.t) := repeat None n.
+
+Lemma join_empty_l :
+  forall G,
+    join (empty (length G)) G = Some G.
+Proof.
+  unfold empty.
+  induction G; simpl.
+  - reflexivity.
+  - rewrite IHG.
+    destruct a; reflexivity.
+Qed.
+
+Lemma join_empty_l' :
+  forall n G,
+    length G = n ->
+    join (empty n) G = Some G.
+Proof.
+  intros.
+  subst n.
+  apply join_empty_l.
+Qed.
+
+Fixpoint is_empty (G : list (option type.t)) : Prop :=
   match G with
   | [] => True
-  | None :: G => empty G
+  | None :: G => is_empty G
   | _ => False
   end.
 
+Lemma is_empty_empty :
+  forall n,
+    is_empty (empty n).
+Proof.
+  unfold empty.
+  induction n; simpl; auto.
+Qed.
+Hint Resolve is_empty_empty.
+
 Fixpoint singleton (x : nat) (ty : type.t) (G : list (option type.t)) {struct G} : Prop :=
   match x, G with
-  | 0, Some ty' :: G => ty = ty' /\ empty G
+  | 0, Some ty' :: G => ty = ty' /\ is_empty G
   | S x, None :: G => singleton x ty G
   | _, _ => False
   end.
@@ -386,7 +418,7 @@ Module has_type.
       t (Some ty2 :: G2) e2 ty ->
       t G (expr.case e e1 e2) ty
   | tt : forall G,
-      empty G ->
+      is_empty G ->
       t G expr.tt type.one
   | let_tt : forall G G1 G2 e1 e2 ty,
       join G1 G2 = Some G ->
@@ -394,18 +426,124 @@ Module has_type.
       t G2 e2 ty ->
       t G (expr.let_tt e1 e2) ty
   .
+  Hint Constructors t.
+
+  Definition has_opt_type G e oty :=
+    match oty with
+    | None => is_empty G
+    | Some ty => has_type.t G e ty
+    end.
+  Arguments has_opt_type _ _ _ : simpl nomatch.
+
+  Lemma big_join_singleton :
+    forall x ty Gs rho G G1,
+      singleton x ty G ->
+      Forall3 has_opt_type Gs rho G ->
+      nth_error Gs x = Some G1 ->
+      big_join (empty (length G1)) Gs = Some G1.
+  Admitted.
+
+  Lemma big_join_length :
+    forall acc Gs G' G1 x,
+      big_join acc Gs = Some G' ->
+      nth_error Gs x = Some G1 ->
+      length G1 = length G'.
+  Admitted.
+
+  Lemma singleton_cons :
+    forall ty G,
+      is_empty G ->
+      singleton 0 ty (Some ty :: G).
+  Proof.
+    intros.
+    simpl.
+    auto.
+  Qed.
+  Hint Resolve singleton_cons.
+
+  Lemma big_join_app :
+    forall G1 G2 Gs G',
+      big_join G2 Gs = Some G' ->
+      big_join (G1 ++ G2) (map (fun G => empty (length G1) ++ G) Gs) = Some (G1 ++ G').
+  Admitted.
+
+  Lemma big_join_cons :
+    forall ty acc Gs G',
+      big_join acc Gs = Some G' ->
+      big_join (Some ty :: acc) (map (fun G => None :: G) Gs) = Some (Some ty :: G').
+  Proof.
+    intros.
+    now apply big_join_app with (G1 := [Some ty]).
+  Qed.
+
+
+  Fixpoint splice A n (l' l : list A) :=
+    match n with
+    | 0 => l' ++ l
+    | S n =>
+      match l with
+      | [] => l' (* bogus *)
+      | x :: l => x :: splice n l' l
+      end
+    end.
+
+  Lemma shift :
+    forall G e ty,
+      t G e ty ->
+      forall n G',
+        t (splice n G' G) (expr.shift n (length G') e) ty.
+  Admitted.
+
+  Lemma shift' :
+    forall G e ty G',
+      t G e ty ->
+      t (G' ++ G) (expr.shift 0 (List.length G') e) ty.
+  Proof.
+    intros.
+    now apply shift with (n := 0) (G' := G').
+  Qed.
+
+  Lemma shift_cons :
+    forall G e ty ty0,
+      t G e ty ->
+      t (ty0 :: G) (expr.shift 0 1 e) ty.
+  Proof.
+    intros.
+    now apply shift' with (G' := [ty0]).
+  Qed.
 
   Lemma subst :
     forall G e ty,
       has_type.t G e ty ->
       forall G' Gs rho,
-        Forall3 (fun G e oty => match oty with
-                             | None => True
-                             | Some ty => has_type.t G e ty
-                             end)
-                Gs rho G ->
-        big_join (List.repeat None (List.length G')) Gs = Some G' ->
+        Forall3 has_opt_type Gs rho G ->
+        big_join (empty (List.length G')) Gs = Some G' ->
         has_type.t G' (expr.subst rho e) ty.
+  Proof.
+    induction 1; intros G' Gs rho F J; cbn [expr.subst].
+    - simpl expr.subst.
+      pose proof singleton_nth_error1 _ _ _ H as NEty.
+      destruct (Forall3_nth_error3 _ F NEty) as [G1 [e [NEG1 [NEe HT]]]].
+      unfold expr.t in *.
+      unfold has_opt_type in HT.
+      rewrite NEe.
+      erewrite <- big_join_length in J by eauto.
+      erewrite big_join_singleton in J by eauto.
+      congruence.
+    - constructor.
+      apply IHt with (Gs := (Some ty1 :: repeat None (length G')) :: map (fun G => None :: G) Gs).
+      constructor.
+      + now simpl; auto.
+      + apply Forall3_map1, Forall3_map2.
+        eapply Forall3_impl; [|eassumption].
+        clear.
+        unfold has_opt_type.
+        intros G e [ty|] H.
+        now apply shift_cons.
+        now simpl.
+      + cbn[big_join].
+        rewrite join_empty_l' by (now simpl; rewrite repeat_length).
+        now apply big_join_cons.
   Admitted.
 End has_type.
 
