@@ -11,3 +11,4 @@ f.v
 f_unary.v
 f_binary.v
 ordered_sequent.v
+linear.v

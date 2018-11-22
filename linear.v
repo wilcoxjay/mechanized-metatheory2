@@ -228,8 +228,6 @@ Module expr.
 
 End expr.
 
-
-
 Definition join_one (oty1 oty2 : option type.t) : option (option type.t) :=
   match oty1, oty2 with
   | None, None => Some None
@@ -643,17 +641,29 @@ Proof.
   - now rewrite empty_length.
 Qed.
 
+Lemma is_empty_Forall_is_empty :
+  forall G Gs,
+    Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
+    is_empty G ->
+    Forall is_empty Gs.
+Proof.
+  induction 1; intros IE.
+  - constructor.
+  - cbn in *.
+    destruct y; intuition.
+Qed.
+
 Lemma big_join_is_singleton :
-  forall x ty Gs rho G G1 G',
+  forall x ty Gs G G1 G',
     is_singleton x ty G ->
-    Forall3 has_opt_type Gs rho G ->
+    Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
     nth_error Gs x = Some G1 ->
     big_join (length G1) Gs = Some G' ->
     G' = G1.
 Proof.
-  intros x ty Gs rho G G1 G' IS F NE.
-  revert ty G IS Gs rho G1 G' F NE.
-  induction x; cbn in *; intros ty G IS Gs rho G1 G' F NE BJ.
+  intros x ty Gs G G1 G' IS F NE.
+  revert ty G IS Gs G1 G' F NE.
+  induction x; cbn in *; intros ty G IS Gs G1 G' F NE BJ.
   - destruct Gs; [discriminate|].
     invc NE.
     rewrite big_join_unroll in BJ.
@@ -664,9 +674,7 @@ Proof.
     destruct o; [|now intuition].
     destruct IS as [? IE]; subst.
     invc F.
-    apply has_opt_type_Some in H3.
-    apply has_opt_type_empty in H5; [|assumption].
-    apply big_join_is_empty in BJ; [|assumption].
+    apply big_join_is_empty in BJ; [|now eauto using is_empty_Forall_is_empty].
     apply is_empty_equal_empty in BJ.
     pose proof join_length2 _ _ J as L.
     rewrite <- L in *.
@@ -681,9 +689,9 @@ Proof.
     rename BJ into J.
     rename BJ2 into BJ.
     cbn in IS.
-    destruct c; [now intuition|].
+    destruct y; [now intuition|].
     cbn in H1.
-    apply is_empty_equal_empty in H1.
+    apply is_empty_equal_empty in H1; [|reflexivity].
     erewrite <- join_length1 in H1 by eauto. subst l.
     erewrite join_length2 in J by eauto.
     rewrite join_empty_l in J.
@@ -782,15 +790,6 @@ Proof.
   intros.
   apply partial_zip.splice;
     auto using join_empty_l', empty_length.
-Qed.
-
-Lemma Forall3_has_opt_type_Forall2_None_is_empty :
-  forall Gs rho G,
-    Forall3 has_opt_type Gs rho G ->
-    Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G.
-Proof.
-  induction 1; constructor; auto.
-  now intros ?; subst c.
 Qed.
 
 Module has_type.
@@ -906,6 +905,15 @@ Module has_type.
     + simpl in E. destruct c; [now intuition|now auto].
   Qed.
 
+  Lemma Forall3_has_opt_type_Forall2_None_is_empty :
+    forall Gs rho G,
+      Forall3 has_opt_type Gs rho G ->
+      Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G.
+  Proof.
+    induction 1; constructor; auto.
+    now intros ?; subst c.
+  Qed.
+
   Lemma shift :
     forall G e ty,
       t G e ty ->
@@ -981,7 +989,7 @@ Module has_type.
       apply has_opt_type_Some in HT.
       rewrite NEe.
       erewrite <- big_join_length with (n := _) in J by eauto.
-      eapply big_join_is_singleton in J; eauto.
+      eapply big_join_is_singleton in J; eauto using FHO.
       congruence.
     - constructor.
       apply IHt with (n := S n)
@@ -1230,5 +1238,6 @@ Proof.
     | [ H : has_type.t _ (_ _) _ |- _ ] => invc H
     end;
     try break_join;
-    eauto using has_type.subst.
+    eauto;
+    eapply has_type.subst; eauto; auto.
 Qed.
