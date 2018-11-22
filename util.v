@@ -309,6 +309,34 @@ Section Forall3.
   Proof.
     induction 1; simpl; intuition.
   Qed.
+
+  Lemma Forall3_length12 :
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      length xs = length ys.
+  Proof.
+    intros xs ys zs F.
+    now apply Forall3_length in F as [? ?].
+  Qed.
+
+  Lemma Forall3_length13 :
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      length xs = length zs.
+  Proof.
+    intros xs ys zs F.
+    now apply Forall3_length in F as [? ?].
+  Qed.
+
+  Lemma Forall3_length23 :
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      length ys = length zs.
+  Proof.
+    intros xs ys zs F.
+    apply Forall3_length in F as [? ?].
+    congruence.
+  Qed.
 End Forall3.
 Hint Constructors Forall3.
 
@@ -491,4 +519,329 @@ Proof.
     destruct H0 as [[? ?]|[W' [? ?]]]; subst.
     + invc H0. constructor 1. rewrite app_nil_r. split; auto.
     + constructor 3. exists W'. split; auto.
+Qed.
+
+Fixpoint nth_set A (l : list A) (n : nat) (x : A) {struct n} : list A :=
+  match n with
+  | 0 =>
+    match l with
+    | [] => []
+    | y :: l => x :: l
+    end
+  | S n =>
+    match l with
+    | [] => []
+    | y :: l => y :: nth_set l n x
+    end
+  end.
+
+Lemma nth_set_length :
+  forall A n (l : list A) x,
+    length (nth_set l n x) = length l.
+Proof.
+  induction n; destruct l; simpl; intros x; auto.
+Qed.
+
+Lemma nth_error_nth_set :
+  forall A n2 n1 (l : list A) x,
+    n1 < List.length l ->
+    nth_error (nth_set l n1 x) n2 =
+    if Nat.eq_dec n1 n2 then Some x else nth_error l n2.
+Proof.
+  induction n2; destruct n1; destruct l; intros x LT; simpl in *;
+    try reflexivity;
+    try omega.
+  rewrite IHn2 by omega.
+  destruct Nat.eq_dec; auto.
+Qed.
+
+Fixpoint splice A n (l' l : list A) :=
+  match n with
+  | 0 => l' ++ l
+  | S n =>
+    match l with
+    | [] => l' (* bogus *)
+    | x :: l => x :: splice n l' l
+    end
+  end.
+
+
+Module partial_zip.
+Section partial_zip.
+  Variable A B C : Type.
+  Variable one : A -> B -> option C.
+
+  Fixpoint f l1 l2 :=
+    match l1, l2 with
+    | [], [] => Some []
+    | x :: l1, y :: l2 =>
+      match one x y, f l1 l2 with
+      | Some z, Some l => Some (z :: l)
+      | _, _ => None
+      end
+    | _, _ => None
+    end.
+
+  Lemma nil :
+    f [] [] = Some [].
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma nil_inv :
+    forall l1 l2,
+      f l1 l2 = Some [] ->
+      l1 = [] /\ l2 = [].
+  Proof.
+    now destruct l1, l2; simpl; repeat break_match; try discriminate.
+  Qed.
+
+  Lemma length1 :
+    forall l1 l2 l3,
+      f l1 l2 = Some l3 ->
+      length l3 = length l1.
+  Proof.
+    induction l1; destruct l2; simpl; intros l3 F; try discriminate.
+    - invc F. reflexivity.
+    - repeat break_match; try discriminate.
+      invc F. simpl.
+      eauto using f_equal.
+  Qed.
+
+  Lemma length2 :
+    forall l1 l2 l3,
+      f l1 l2 = Some l3 ->
+      length l3 = length l2.
+  Proof.
+    induction l1; destruct l2; simpl; intros l3 F; try discriminate.
+    - invc F. reflexivity.
+    - repeat break_match; try discriminate.
+      invc F. simpl.
+      eauto using f_equal.
+  Qed.
+
+  Lemma app :
+    forall l1 l2 l3 l1' l2' l3',
+      f l1 l2 = Some l3 ->
+      f l1' l2' = Some l3' ->
+      f (l1 ++ l1') (l2 ++ l2') = Some (l3 ++ l3').
+  Proof.
+    induction l1; simpl; intros l2 l3 l1' l2' l3' F F'; destruct l2; try discriminate; simpl.
+    - invc F. auto.
+    - destruct one; [|discriminate].
+      destruct f eqn:F2; [|discriminate].
+      invc F.
+      now erewrite IHl1 by eauto.
+  Qed.
+
+  Lemma splice :
+    forall n l1 l2 l3 l1' l2' l3',
+      f l1 l2 = Some l3 ->
+      f l1' l2' = Some l3' ->
+      f (splice n l1 l1') (splice n l2 l2') = Some (splice n l3 l3').
+  Proof.
+    induction n; simpl; intros l1 l2 l3 l1' l2' l3' F F'.
+    - auto using app.
+    - destruct l1', l2'; simpl in F' |- *; try discriminate.
+      + now invc F'.
+      + destruct one; [|discriminate].
+        destruct (f l1' l2') eqn:F2; [|discriminate].
+        invc F'.
+        now erewrite IHn by eauto.
+  Qed.
+End partial_zip.
+  Lemma id_l :
+    forall A B (one : A -> B -> option B) a0,
+      (forall b, one a0 b = Some b) ->
+      forall l,
+        f one (repeat a0 (length l)) l = Some l.
+  Proof.
+    intros A B one a0 id.
+    induction l; simpl; auto.
+    now rewrite id, IHl.
+  Qed.
+
+  Lemma comm :
+    forall A B (one : A -> A -> option B),
+      (forall x y, one x y = one y x) ->
+      forall l1 l2,
+        f one l1 l2 = f one l2 l1.
+  Proof.
+    intros A B one C.
+    induction l1; destruct l2; simpl; auto.
+    rewrite C.
+    destruct one; auto.
+    rewrite IHl1.
+    destruct f; auto.
+  Qed.
+
+  Lemma assoc :
+    forall A (one : A -> A -> option A),
+    (forall a1 a2 b,
+        match one a1 b with
+        | Some b' => one a2 b'
+        | None => None
+        end = match one a2 b with
+              | Some b' => one a1 b'
+              | None => None
+              end) ->
+    forall a1 a2 b,
+        match f one a1 b with
+        | Some b' => f one a2 b'
+        | None => None
+        end = match f one a2 b with
+              | Some b' => f one a1 b'
+              | None => None
+              end.
+  Proof.
+    intros A one Step a1.
+    induction a1; destruct a2, b; simpl; auto.
+    - repeat break_match; congruence.
+    - repeat break_match; congruence.
+    - specialize (Step a a0 a3).
+      specialize (IHa1 a2 b).
+      destruct (one a a3) eqn:?.
+      destruct (f one a1 b) eqn:?.
+      rewrite Step.
+      repeat break_match; congruence.
+      repeat break_match; congruence.
+      repeat break_match; congruence.
+  Qed.
+End partial_zip.
+
+Module partial_fold_left.
+Section partial_fold_left.
+  Variable A B : Type.
+  Variable step : A -> B -> option B.
+
+  Fixpoint f acc l :=
+    match l with
+    | [] => Some acc
+    | x :: l =>
+      match step x acc with
+      | None => None
+      | Some acc => f acc l
+      end
+    end.
+
+  Lemma push_step :
+    (forall a1 a2 b,
+      match step a1 b with
+      | None => None
+      | Some b' => step a2 b'
+      end
+      =
+      match step a2 b with
+      | None => None
+      | Some b' => step a1 b'
+      end) ->
+    forall x l acc,
+      match step x acc with
+      | None => None
+      | Some acc' => f acc' l
+      end
+      =
+      match f acc l with
+      | None => None
+      | Some acc'' => step x acc''
+      end.
+  Proof.
+    intros Swap.
+    induction l; intros acc; simpl; [break_match; reflexivity|].
+    pose proof Swap x a acc as Swap_ax.
+    specialize (IHl (match step a acc with
+                     | None => acc
+                     | Some acc' => acc'
+                     end)).
+    repeat break_match; congruence.
+  Qed.
+
+  Lemma distr :
+    forall (mulA : A -> A) (mulB : B -> B),
+      (forall a b,
+          step (mulA a) (mulB b) =
+          match step a b with
+          | Some b' => Some (mulB b')
+          | None => None
+          end) ->
+      forall l acc,
+        f (mulB acc) (map mulA l) =
+        match f acc l with
+        | Some b => Some (mulB b)
+        | None => None
+        end.
+  Proof.
+    intros mulA mulB Distr.
+    induction l; intros acc; simpl; [reflexivity|].
+    rewrite Distr.
+    destruct step; auto.
+  Qed.
+
+  Lemma ind_Some :
+    forall (P : A -> Prop) (Q : B -> Prop),
+      (forall a b b', P a -> Q b -> step a b = Some b' -> Q b') ->
+      forall l b b',
+        Forall P l ->
+        Q b ->
+        f b l = Some b' ->
+        Q b'.
+  Proof.
+    intros P Q H.
+    induction l; cbn; intros b b' All HQ F.
+    - now invc F.
+    - invc All.
+      destruct step eqn:Step; [|discriminate].
+      eauto.
+  Qed.
+End partial_fold_left.
+End partial_fold_left.
+
+Section project.
+  Variable A B : Type.
+  Variable default : B.
+  Fixpoint project (l1 : list (option A)) (l2 : list B) : list B :=
+    match l2 with
+    | [] => []
+    | x :: l2 =>
+      match l1 with
+      | [] => default :: project l1 l2
+      | None :: l1 => default :: project l1 l2
+      | Some _ :: l1 => x :: project l1 l2
+      end
+    end.
+End project.
+
+Lemma Forall3_project :
+  forall F A B C (P : A -> B -> C -> Prop) (dA : A) (dC: C),
+    (forall b, P dA b dC) ->
+    forall l1 l2 l3,
+      Forall3 P l1 l2 l3 ->
+      forall (l : list (option F)),
+        Forall3 P (project dA l l1) l2 (project dC l l3).
+Proof.
+  intros F A B C P dA dC D.
+  induction 1; simpl.
+  - constructor.
+  - destruct l; [now auto|].
+    destruct o; auto.
+Qed.
+Hint Resolve Forall3_project.
+
+Lemma partial_zip_project :
+  forall A B (f : option A -> B -> option (option A)) l1 l2 l3,
+    (forall a b o, f (Some a) b = Some o -> o = Some a) ->
+    partial_zip.f f l1 l2 = Some l3 ->
+    project None l1 l3 = l1.
+Proof.
+  induction l1; destruct l2; simpl; intros l3 F EQ.
+  - invc EQ. reflexivity.
+  - discriminate.
+  - discriminate.
+  - destruct f eqn:EF; [|discriminate].
+    destruct partial_zip.f eqn:EPZ; [|discriminate].
+    invc EQ.
+    simpl.
+    destruct a eqn:EQa.
+    + apply F in EF. subst. eauto using f_equal.
+    + eauto using f_equal.
 Qed.
