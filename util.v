@@ -98,7 +98,7 @@ Lemma Forall2_from_forall :
   forall A B (P : A -> B -> Prop) l1 l2,
     length l1 = length l2 ->
     (forall x y z,
-        List.nth_error l1 x = Some y -> 
+        List.nth_error l1 x = Some y ->
         List.nth_error l2 x = Some z ->
         P y z) ->
     List.Forall2 P l1 l2.
@@ -241,7 +241,7 @@ Ltac do_max_spec :=
       match goal with
       | [ H : context [ Init.Nat.max ?x ?y ] |- _ ] =>
         pose proof Nat.max_spec x y
-      | [ |- context [ Init.Nat.max ?x ?y ] ] => 
+      | [ |- context [ Init.Nat.max ?x ?y ] ] =>
         pose proof Nat.max_spec x y
       end.
 
@@ -253,7 +253,7 @@ Section Forall3.
   | Forall3_nil : Forall3 [] [] []
   | Forall3_cons : forall a b c xs ys zs,
       P a b c ->
-      Forall3 xs ys zs -> 
+      Forall3 xs ys zs ->
       Forall3 (a :: xs) (b :: ys) (c :: zs).
 
   Lemma Forall3_nth_error1 :
@@ -811,6 +811,20 @@ Section project.
     end.
 End project.
 
+Lemma Forall_project :
+  forall F A (P : A -> Prop) d,
+    P d ->
+    forall l1,
+      Forall P l1 ->
+      forall l : list (option F),
+        Forall P (project d l l1).
+Proof.
+  intros F A P d Pd.
+  induction 1; intros xs; cbn.
+  - constructor.
+  - destruct xs as [|[|]]; auto.
+Qed.
+
 Lemma Forall3_project :
   forall F A B C (P : A -> B -> C -> Prop) (dA : A) (dC: C),
     (forall b, P dA b dC) ->
@@ -844,4 +858,56 @@ Proof.
     destruct a eqn:EQa.
     + apply F in EF. subst. eauto using f_equal.
     + eauto using f_equal.
+Qed.
+
+Lemma ForallOrdPairs_map :
+  forall A B (f : A -> B) (P : B -> B -> Prop) l,
+    ForallOrdPairs (fun a1 a2 => P (f a1) (f a2)) l ->
+    ForallOrdPairs P (map f l).
+Proof.
+  induction 1; cbn; constructor; auto.
+  now apply Forall_map.
+Qed.
+
+Lemma ForallOrdPairs_impl :
+  forall A (P Q : A -> A -> Prop) l,
+    (forall a1 a2, P a1 a2 -> Q a1 a2) ->
+    ForallOrdPairs P l ->
+    ForallOrdPairs Q l.
+Proof.
+  intros A P Q l I F.
+  induction F; constructor; auto.
+  now eapply Forall_impl; try apply I.
+Qed.
+
+Module zip.
+Section zip.
+  Variable A B C : Type.
+  Variable f : A -> B -> C.
+
+  Fixpoint zip l1 l2 :=
+    match l1, l2 with
+    | [], [] => []
+    | x :: l1, y :: l2 => f x y :: zip l1 l2
+    | _, _ => [] (* bogus *)
+    end.
+End zip.
+End zip.
+Notation zip := zip.zip.
+
+Lemma project_unroll :
+  forall A B (d : B) (l : list (option A)) b bs,
+    project d l (b :: bs) =
+    match l with
+    | [] | None :: _ => d
+    | Some _ :: _ => b
+    end ::
+        project d (match l with
+                   | [] => []
+                   | _ :: l => l
+                   end) bs.
+Proof.
+  intros A B d l b bs.
+  cbn.
+  destruct l as [|[|]]; reflexivity.
 Qed.

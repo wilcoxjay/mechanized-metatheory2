@@ -228,155 +228,15 @@ Module expr.
 
 End expr.
 
-Definition join_one (oty1 oty2 : option type.t) : option (option type.t) :=
-  match oty1, oty2 with
-  | None, None => Some None
-  | Some ty1, None => Some (Some ty1)
-  | None, Some ty2 => Some (Some ty2)
-  | _, _ => None
-  end.
+Module empty.
+  Definition empty n : list (option type.t) := repeat None n.
 
-Lemma join_one_comm :
-  forall l1 l2,
-    join_one l1 l2 = join_one l2 l1.
-Proof.
-  unfold join_one.
-  intros.
-  repeat break_match; auto.
-Qed.
-
-Lemma join_one_assoc :
-  forall a1 a2 b,
-    match join_one a1 b with
-    | Some b' => join_one a2 b'
-    | None => None
-    end = match join_one a2 b with
-          | Some b' => join_one a1 b'
-          | None => None
-          end.
-Proof.
-  unfold join_one.
-  intros.
-  repeat break_match; congruence.
-Qed.
-
-Definition join G1 G2 := partial_zip.f join_one G1 G2.
-Hint Opaque join.
-
-Lemma join_nil :
-  join [] [] = Some [].
-Proof.
-  apply partial_zip.nil.
-Qed.
-Hint Resolve join_nil.
-
-Lemma join_nil_inv :
-  forall G1 G2,
-    join G1 G2 = Some [] ->
-    G1 = [] /\ G2 = [].
-Proof.
-  apply partial_zip.nil_inv.
-Qed.
-
-Definition empty n : list (option type.t) := repeat None n.
-
-Lemma join_one_None_l :
-  forall oty,
-    join_one None oty = Some oty.
-Proof.
-  destruct oty; auto.
-Qed.
-
-Lemma join_empty_l :
-  forall G,
-    join (empty (length G)) G = Some G.
-Proof.
-  unfold join, empty.
-  intros G.
-  now rewrite partial_zip.id_l by auto using join_one_None_l.
-Qed.
-
-Lemma join_empty_l' :
-  forall n G,
-    length G = n ->
-    join (empty n) G = Some G.
-Proof.
-  intros.
-  subst n.
-  apply join_empty_l.
-Qed.
-
-Lemma join_length1 :
-  forall l1 l2 l3,
-    join l1 l2 = Some l3 ->
-    length l3 = length l1.
-Proof.
-  apply partial_zip.length1.
-Qed.
-
-Lemma join_length2 :
-  forall l1 l2 l3,
-    join l1 l2 = Some l3 ->
-    length l3 = length l2.
-Proof.
-  apply partial_zip.length2.
-Qed.
-
-Lemma join_unroll :
-  forall x1 x2 l1 l2,
-    join (x1 :: l1) (x2 :: l2) =
-    match join_one x1 x2 with
-    | None => None
-    | Some y =>
-      match join l1 l2 with
-      | None => None
-      | Some ys => Some (y :: ys)
-      end
-    end.
-Proof.
-  reflexivity.
-Qed.
-
-Lemma join_comm :
-  forall l1 l2,
-    join l1 l2 = join l2 l1.
-Proof.
-  apply partial_zip.comm.
-  apply join_one_comm.
-Qed.
-
-Lemma join_empty_r :
-  forall G,
-    join G (empty (length G)) = Some G.
-Proof.
-  intros.
-  now rewrite join_comm, join_empty_l.
-Qed.
-
-Lemma join_empty_r' :
-  forall G n,
-    length G = n ->
-    join G (empty n) = Some G.
-Proof.
-  intros.
-  subst.
-  now rewrite join_empty_r.
-Qed.
-
-Lemma join_assoc :
-  forall a1 a2 b,
-    match join a1 b with
-    | Some b' => join a2 b'
-    | None => None
-    end = match join a2 b with
-          | Some b' => join a1 b'
-          | None => None
-          end.
-Proof.
-  intros.
-  apply partial_zip.assoc.
-  apply join_one_assoc.
-Qed.
+  Lemma unroll : forall n, empty (S n) = None :: empty n.
+  Proof.
+    reflexivity.
+  Qed.
+End empty.
+Notation empty := empty.empty.
 
 Fixpoint is_empty (G : list (option type.t)) : Prop :=
   match G with
@@ -401,9 +261,10 @@ Lemma is_empty_equal_empty :
 Proof.
   induction l; cbn; intros IS.
   - auto.
-  - destruct a; intuition.
-    f_equal. apply H.
+  - destruct a; intuition auto using f_equal2.
 Qed.
+
+Definition empty_if_None Γ (oty : option type.t) := oty = None -> is_empty Γ.
 
 Fixpoint is_singleton (x : nat) (ty : type.t) (G : list (option type.t)) {struct G} : Prop :=
   match x, G with
@@ -421,189 +282,12 @@ Proof.
   congruence.
 Qed.
 
-Definition big_join n Gs :=
-  partial_fold_left.f join (empty n) Gs.
-Hint Opaque big_join.
-
-Lemma big_join_unroll :
-  forall n G Gs,
-    big_join n (G :: Gs) =
-    match big_join n Gs with
-    | Some G' => join G G'
-    | None => None
-    end.
-Proof.
-  unfold big_join.
-  intros n G Gs.
-  pose proof partial_fold_left.push_step join join_assoc as Push.
-  now rewrite <- Push.
-Qed.
-
-Lemma big_join_map_cons_None2 :
-  forall n Gs,
-    big_join (S (S n)) (map (fun x => None :: None :: x) Gs) =
-    match big_join n Gs with
-    | None => None
-    | Some G' => Some (None :: None :: G')
-    end.
-Proof.
-  intros n Gs.
-  apply partial_fold_left.distr with (mulA := fun x => None :: None :: x)
-                                     (mulB := fun x => None :: None :: x).
-  simpl.
-  intros.
-  repeat break_match; congruence.
-Qed.
-
-Lemma big_join_map_cons_None :
-  forall n Gs,
-    big_join (S n) (map (fun x => None :: x) Gs) =
-    match big_join n Gs with
-    | None => None
-    | Some G' => Some (None :: G')
-    end.
-Proof.
-  intros n Gs.
-  apply partial_fold_left.distr with (mulA := fun x => None :: x) (mulB := fun x => None :: x).
-  reflexivity.
-Qed.
-
-Lemma join_one_Some_inv :
-  forall a b o,
-    join_one (Some a) b = Some o ->
-    o = Some a.
-Proof.
-  unfold join_one.
-  intros.
-  destruct b; congruence.
-Qed.
-
-Lemma join_project1 :
-  forall G1 G2 G,
-    join G1 G2 = Some G ->
-    project None G1 G = G1.
-Proof.
-  unfold join.
-  intros G1 G2 G J.
-  eapply partial_zip_project; [|now apply J].
-  apply join_one_Some_inv.
-Qed.
-
-Lemma join_project2 :
-  forall G1 G2 G,
-    join G1 G2 = Some G ->
-    project None G2 G = G2.
-Proof.
-  intros G1 G2 G J.
-  rewrite join_comm in J.
-  eauto using join_project1.
-Qed.
-
 Lemma empty_length :
   forall n,
     length (empty n) = n.
 Proof.
   induction n; simpl; auto.
 Qed.
-
-Lemma big_join_length_acc :
-  forall Gs n G',
-    big_join n Gs = Some G' ->
-    length G' = n.
-Proof.
-  induction Gs; intros n G' BJ.
-  - cbn in *. invc BJ.
-    auto using empty_length.
-  - rewrite big_join_unroll in BJ.
-    destruct big_join eqn:BJ2; [|discriminate].
-    rename BJ into J.
-    rename BJ2 into BJ.
-    erewrite join_length2 by eauto.
-    eauto.
-Qed.
-
-Lemma big_join_length :
-  forall Gs n G' G1 x,
-    big_join n Gs = Some G' ->
-    nth_error Gs x = Some G1 ->
-    length G1 = n.
-Proof.
-  induction Gs; intros n G' G1 x BJ NE.
-  - destruct x; discriminate.
-  - rewrite big_join_unroll in BJ.
-    destruct big_join eqn:BJ2; [|discriminate].
-    rename BJ into J.
-    rename BJ2 into BJ.
-    destruct x; cbn in NE.
-    + invc NE.
-      erewrite <- join_length1 by eauto.
-      erewrite join_length2 by eauto.
-      eauto using big_join_length_acc.
-    + eapply IHGs; eauto.
-Qed.
-
-Lemma big_join_project :
-  forall Gs G1 G2 G G' n,
-    join G1 G2 = Some G ->
-    big_join n Gs = Some G' ->
-    Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
-    exists G1' G2',
-      big_join n (project (empty n) G1 Gs) = Some G1' /\
-      big_join n (project (empty n) G2 Gs) = Some G2' /\
-      join G1' G2' = Some G'.
-Proof.
-  induction Gs; intros G1 G2 G G' n J BJ F.
-  - cbn in BJ. invc BJ.
-    cbn.
-    do 2 eexists.
-    split; [|split]; eauto.
-    now rewrite join_empty_l' by auto using empty_length.
-  - rewrite big_join_unroll in BJ.
-    destruct big_join eqn:BJ2; [|discriminate].
-    rename BJ into J'.
-    rename BJ2 into BJ.
-    invc F.
-    destruct G1, G2; try solve [cbn in J; discriminate].
-    rewrite join_unroll in J.
-    destruct join_one eqn:JO; [|discriminate].
-    destruct join eqn:J12; [|discriminate].
-    invc J.
-
-    eapply IHGs with (G1 := G1) in BJ; eauto.
-    destruct BJ as (G1' & G2' & BJ1' & BJ2' & J).
-    assert (length G1' = n) as LG1' by eauto using big_join_length_acc.
-    assert (length G2' = n) as LG2' by eauto using big_join_length_acc.
-
-    cbn [project].
-    destruct o, o0; try solve [cbn in *; discriminate];
-      rewrite !big_join_unroll, BJ1', BJ2';
-      rewrite !join_empty_l' by auto.
-    + pose proof join_assoc G2' a G1' as JA.
-      rewrite join_comm in JA.
-      rewrite J, J' in JA. symmetry in JA.
-      destruct (join a G1') eqn:JA'; [|discriminate].
-      setoid_rewrite join_comm.
-      eauto.
-    + pose proof join_assoc G1' a G2' as JA.
-      rewrite J, J' in JA. symmetry in JA.
-      destruct (join a G2') eqn:JA'; [|discriminate].
-      eauto.
-    + invc JO.
-      rewrite is_empty_equal_empty with (l := a) in J' by auto.
-      rewrite join_empty_l' in J'
-        by (erewrite <- join_length2 by eauto;
-            erewrite join_length1 by eauto;
-            now rewrite empty_length).
-      invc J'.
-      eauto.
-Qed.
-
-Ltac break_join :=
- match goal with
- | [ H : join _ _ = Some [] |- _ ] =>
-   apply join_nil_inv in H;
-   destruct H as [? ?]; subst
- end.
 
 Lemma is_singleton_cons :
   forall ty G,
@@ -619,28 +303,6 @@ Lemma is_singleton_skip :
 Proof. auto. Qed.
 Hint Resolve is_singleton_skip.
 
-Lemma big_join_is_empty :
-  forall n Gs G',
-    Forall is_empty Gs ->
-    big_join n Gs = Some G' ->
-    is_empty G'.
-Proof.
-  unfold big_join.
-  intros n Gs G' F BJ.
-  eapply partial_fold_left.ind_Some with (P := is_empty); try apply BJ; auto.
-  clear.
-  intros a b b' A B J.
-  apply is_empty_equal_empty in A.
-  apply is_empty_equal_empty in B.
-  pose proof join_length1 _ _ J as L1.
-  pose proof join_length2 _ _ J as L2.
-  rewrite <- L1, <- L2 in *. clear L1 L2.
-  subst a b.
-  rewrite join_empty_l' in J.
-  - invc J. auto.
-  - now rewrite empty_length.
-Qed.
-
 Lemma is_empty_Forall_is_empty :
   forall G Gs,
     Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
@@ -651,52 +313,6 @@ Proof.
   - constructor.
   - cbn in *.
     destruct y; intuition.
-Qed.
-
-Lemma big_join_is_singleton :
-  forall x ty Gs G G1 G',
-    is_singleton x ty G ->
-    Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
-    nth_error Gs x = Some G1 ->
-    big_join (length G1) Gs = Some G' ->
-    G' = G1.
-Proof.
-  intros x ty Gs G G1 G' IS F NE.
-  revert ty G IS Gs G1 G' F NE.
-  induction x; cbn in *; intros ty G IS Gs G1 G' F NE BJ.
-  - destruct Gs; [discriminate|].
-    invc NE.
-    rewrite big_join_unroll in BJ.
-    destruct big_join eqn:BJ2; [|discriminate].
-    rename BJ into J.
-    rename BJ2 into BJ.
-    destruct G; cbn in IS; [now intuition|].
-    destruct o; [|now intuition].
-    destruct IS as [? IE]; subst.
-    invc F.
-    apply big_join_is_empty in BJ; [|now eauto using is_empty_Forall_is_empty].
-    apply is_empty_equal_empty in BJ.
-    pose proof join_length2 _ _ J as L.
-    rewrite <- L in *.
-    subst l.
-    erewrite join_length1 in J by eassumption.
-    rewrite join_empty_r in J.
-    congruence.
-  - destruct Gs; [discriminate|].
-    invc F.
-    rewrite big_join_unroll in BJ.
-    destruct big_join eqn:BJ2; [|discriminate].
-    rename BJ into J.
-    rename BJ2 into BJ.
-    cbn in IS.
-    destruct y; [now intuition|].
-    cbn in H1.
-    apply is_empty_equal_empty in H1; [|reflexivity].
-    erewrite <- join_length1 in H1 by eauto. subst l.
-    erewrite join_length2 in J by eauto.
-    rewrite join_empty_l in J.
-    invc J.
-    eauto.
 Qed.
 
 Lemma is_singleton_app :
@@ -773,24 +389,772 @@ Proof.
       now auto.
 Qed.
 
-Lemma join_app :
-  forall G1 G2 G G1' G2' G',
-    join G1 G2 = Some G ->
-    join G1' G2' = Some G' ->
-    join (G1 ++ G1') (G2 ++ G2') = Some (G ++ G').
-Proof.
-  apply partial_zip.app.
-Qed.
+Module joinable_one.
+  Definition joinable_one (x y : option type.t) := x = None \/ y = None.
 
-Lemma join_splice :
-  forall n n' G1 G2 G,
-    join G1 G2 = Some G ->
-    join (splice n (empty n') G1) (splice n (empty n') G2) = Some (splice n (empty n') G).
-Proof.
-  intros.
-  apply partial_zip.splice;
-    auto using join_empty_l', empty_length.
-Qed.
+  Lemma None_l :
+    forall oty,
+      joinable_one None oty.
+  Proof.
+    now left.
+  Qed.
+
+  Lemma None_r :
+    forall oty,
+      joinable_one oty None.
+  Proof.
+    now right.
+  Qed.
+
+  Lemma comm :
+    forall x y,
+      joinable_one x y ->
+      joinable_one y x.
+  Proof.
+    unfold joinable_one.
+    intuition.
+  Qed.
+
+  Lemma Some2 :
+    forall x y,
+      joinable_one (Some x) (Some y) -> False.
+  Proof.
+    destruct 1; discriminate.
+  Qed.
+End joinable_one.
+Notation joinable_one := joinable_one.joinable_one.
+
+Module join_one.
+  Definition join_one (oty1 oty2 : option type.t) : option type.t :=
+    match oty1, oty2 with
+    | None, None => None
+    | Some _, None => oty1
+    | None, Some _ => oty2
+    | _, _ => None (* bogus *)
+    end.
+
+  Lemma None_l :
+    forall oty,
+      join_one None oty = oty.
+  Proof.
+    destruct oty; reflexivity.
+  Qed.
+
+  Lemma None_r :
+    forall oty,
+      join_one oty None = oty.
+  Proof.
+    destruct oty; reflexivity.
+  Qed.
+
+  Lemma comm :
+    forall x y,
+      join_one x y = join_one y x.
+  Proof.
+    destruct x, y; reflexivity.
+  Qed.
+
+  Lemma joinable_one_r :
+    forall a b c,
+      joinable_one a b ->
+      joinable_one a c ->
+      joinable_one b c ->
+      joinable_one a (join_one b c).
+  Proof.
+    unfold joinable_one, join_one.
+    now intuition; subst; auto.
+  Qed.
+
+  Lemma Some_l :
+    forall x y,
+      joinable_one (Some x) y ->
+      join_one (Some x) y = Some x.
+  Proof.
+    unfold joinable_one.
+    destruct x, y; cbn; intuition discriminate.
+  Qed.
+
+  Lemma assoc :
+    forall a b c,
+      joinable_one a b ->
+      join_one (join_one a b) c = join_one a (join_one b c).
+  Proof.
+    destruct a, b, c; cbn; auto.
+    unfold joinable_one.
+    intuition discriminate.
+  Qed.
+
+  Lemma joinable_one :
+    forall a b c d,
+      joinable_one a b ->
+      joinable_one a c ->
+      joinable_one a d ->
+      joinable_one b c ->
+      joinable_one b d ->
+      joinable_one c d ->
+      joinable_one (join_one a b) (join_one c d).
+  Proof.
+    unfold joinable_one, join_one.
+    intros a b c d [|]; subst.
+    - intros _ _. intuition; subst; auto.
+    - intros ? ? _ _. intuition; subst; auto.
+  Qed.
+End join_one.
+Notation join_one := join_one.join_one.
+
+Module joinable.
+  Definition joinable (G1 G2 : list (option type.t)) : Prop :=
+    Forall2 joinable_one G1 G2.
+
+  Lemma cons_intro :
+    forall x y xs ys,
+      joinable_one x y ->
+      joinable xs ys ->
+      joinable (x :: xs) (y :: ys).
+  Proof.
+    intros x y xs ys.
+    unfold joinable.
+    intuition.
+  Qed.
+
+  Lemma app :
+    forall G1 G2 G1' G2',
+      joinable G1 G2 ->
+      joinable G1' G2' ->
+      joinable (G1 ++ G1') (G2 ++ G2').
+  Proof.
+    unfold joinable.
+    induction 1; cbn; auto.
+  Qed.
+
+  Lemma splice :
+    forall n G1 G2 G1' G2',
+      joinable G1 G2 ->
+      joinable G1' G2' ->
+      joinable (splice n G1' G1) (splice n G2' G2).
+  Proof.
+    unfold joinable.
+    induction n; intros G1 G2 G1' G2' J J'; cbn [splice].
+    - apply app; auto.
+    - invc J; auto.
+  Qed.
+
+  Lemma is_empty_l :
+    forall G1 G2,
+      is_empty G1 ->
+      length G1 = length G2 ->
+      joinable G1 G2.
+  Proof.
+    unfold joinable.
+    induction G1; cbn; intros G2 IE L.
+    - destruct G2; [|discriminate].
+      now auto.
+    - destruct a; [now intuition|].
+      destruct G2; [discriminate|].
+      now auto using joinable_one.None_l.
+  Qed.
+
+  Lemma empty_l :
+    forall n G,
+      length G = n ->
+      joinable (empty n) G.
+  Proof.
+    intros n G <-.
+    auto using is_empty_l, empty_length.
+  Qed.
+
+  Lemma comm :
+    forall G1 G2,
+      joinable G1 G2 ->
+      joinable G2 G1.
+  Proof.
+    unfold joinable.
+    induction 1; constructor; intuition auto using joinable_one.comm.
+  Qed.
+
+  Lemma is_empty_r :
+    forall G1 G2,
+      is_empty G2 ->
+      length G1 = length G2 ->
+      joinable G1 G2.
+  Proof.
+    auto using comm, is_empty_l.
+  Qed.
+
+  Lemma empty_r :
+    forall n G,
+      length G = n ->
+      joinable G (empty n).
+  Proof.
+    auto using comm, empty_l.
+  Qed.
+
+  Lemma empty_internal :
+    forall n,
+      joinable (empty n) (empty n).
+  Proof.
+    intros n.
+    apply is_empty_l; auto.
+  Qed.
+  Hint Resolve empty_internal.
+
+  Lemma splice_empty :
+    forall n n' G1 G2,
+      joinable G1 G2 ->
+      joinable (util.splice n (empty n') G1) (util.splice n (empty n') G2).
+  Proof.
+    eauto using splice.
+  Qed.
+
+  Lemma cons_None :
+    forall a1 a2,
+      joinable a1 a2 ->
+      joinable (None :: a1) (None :: a2).
+  Proof.
+    unfold joinable.
+    auto using joinable_one.None_l.
+  Qed.
+
+  Lemma Forall_length :
+    forall n Gs,
+      Forall (fun G => length G = n) Gs ->
+      Forall (joinable (empty n)) Gs.
+  Proof.
+    intros n Gs.
+    apply Forall_impl.
+    auto using empty_l.
+  Qed.
+
+  Lemma nil :
+    joinable [] [].
+  Proof.
+    constructor.
+  Qed.
+  Hint Resolve nil.
+
+  Notation empty := empty_internal.
+End joinable.
+Notation joinable := joinable.joinable.
+
+Module join.
+  Definition join (G1 G2 : list (option type.t)) : list (option type.t) :=
+    zip join_one G1 G2.
+
+  Lemma unroll :
+    forall x y xs ys,
+      join (x :: xs) (y :: ys) = join_one x y :: join xs ys.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma app :
+    forall G1 G1' G2 G2',
+      joinable G1 G2 ->
+      joinable G1' G2' ->
+      join (G1 ++ G1') (G2 ++ G2') = join G1 G2 ++ join G1' G2'.
+  Proof.
+    unfold joinable, join.
+    induction 1; intros J'; cbn; auto using f_equal.
+  Qed.
+
+  Lemma splice :
+    forall n G1 G1' G2 G2',
+      joinable G1 G2 ->
+      joinable G1' G2' ->
+      join (splice n G1' G1) (splice n G2' G2) = splice n (join G1' G2') (join G1 G2).
+  Proof.
+    unfold join, joinable.
+    induction n; intros G1 G1' G2 G2' JA JA'; cbn[splice].
+    - apply app; auto.
+    - invc JA; cbn; auto using f_equal.
+  Qed.
+
+  Lemma is_empty_l :
+    forall G1 G2,
+      joinable G1 G2 ->
+      is_empty G1 ->
+      join G1 G2 = G2.
+  Proof.
+    unfold joinable, join.
+    induction 1; cbn; intros IE.
+    - now auto.
+    - destruct x; [now intuition|].
+      rewrite join_one.None_l.
+      auto using f_equal.
+  Qed.
+
+  Lemma empty_l :
+    forall n G,
+      length G = n ->
+      join (empty n) G = G.
+  Proof.
+    intros n G L.
+    apply is_empty_l; auto using joinable.empty_l.
+  Qed.
+
+  Lemma empty_internal :
+    forall n,
+      join (empty n) (empty n) = empty n.
+  Proof.
+    auto using is_empty_l.
+  Qed.
+
+  Lemma splice_empty :
+    forall n n' G1 G2 G,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      join (util.splice n (empty n') G1)
+           (util.splice n (empty n') G2) =
+        util.splice n (empty n') G.
+  Proof.
+    intros n n' G1 G2 G JA J.
+    rewrite splice by auto using joinable.is_empty_l.
+    rewrite is_empty_l by auto.
+    congruence.
+  Qed.
+
+  Lemma comm :
+    forall G1 G2,
+      joinable G1 G2 ->
+      join G1 G2 = join G2 G1.
+  Proof.
+    unfold joinable, join.
+    induction 1; cbn.
+    - now auto.
+    - auto using f_equal2, join_one.comm.
+  Qed.
+
+  Lemma length1 :
+    forall xs ys,
+      joinable xs ys ->
+      length (join xs ys) = length xs.
+  Proof.
+    unfold joinable, join.
+    induction 1; cbn; auto.
+  Qed.
+
+  Lemma joinable_r :
+    forall a b c,
+      joinable a b ->
+      joinable a c ->
+      joinable b c ->
+      joinable a (join b c).
+  Proof.
+    unfold joinable, join.
+    intros a b c Jab.
+    revert c.
+    induction Jab; intros c Jac Jbc; invc Jac; invc Jbc; constructor;
+      auto using join_one.joinable_one_r.
+  Qed.
+
+  Lemma joinable_internal :
+    forall a b c d,
+      joinable a b ->
+      joinable a c ->
+      joinable a d ->
+      joinable b c ->
+      joinable b d ->
+      joinable c d ->
+      joinable (join a b) (join c d).
+  Proof.
+    unfold joinable, join.
+    intros a b c d Jab.
+    revert c d.
+    induction Jab; intros c d Jac Jad Jbc Jbd Jcd;
+      invc Jac; invc Jad; invc Jbc; invc Jbd; invc Jcd;
+        constructor;
+        auto using join_one.joinable_one.
+  Qed.
+
+  Lemma project1 :
+    forall G1 G2 G,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      project None G1 G = G1.
+  Proof.
+    unfold joinable.joinable, join.
+    intros G1 G2 G JA J.
+    revert G J.
+    induction JA; intros G J; subst; cbn.
+    - reflexivity.
+    - destruct x; f_equal; eauto using join_one.Some_l.
+  Qed.
+
+  Lemma project2 :
+    forall G1 G2 G,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      project None G2 G = G2.
+  Proof.
+    intros G1 G2 G JA J.
+    rewrite comm in J by auto.
+    eauto using project1, joinable.comm.
+  Qed.
+
+  Lemma assoc :
+    forall a b c,
+      joinable a b ->
+      join (join a b) c = join a (join b c).
+  Proof.
+    induction a; intros [|? b] [|? c] JA; cbn; auto.
+    invc JA.
+    auto using join_one.assoc, f_equal2.
+  Qed.
+
+  Lemma swizzle :
+    forall a b c d,
+      joinable a b ->
+      joinable a c ->
+      joinable b c ->
+      joinable b d ->
+      joinable c d ->
+      join (join a b) (join c d) = join (join a c) (join b d).
+  Proof.
+    intros a b c d.
+    intros.
+    rewrite join.assoc by assumption.
+    rewrite join.comm with (G1 := b) by auto using join.joinable_r.
+    rewrite join.assoc by assumption.
+    rewrite <- join.comm with (G1 := b) by assumption.
+    rewrite <- join.assoc by assumption.
+    reflexivity.
+  Qed.
+
+  Lemma nil_elim :
+    forall G1 G2,
+      joinable G1 G2 ->
+      join G1 G2 = [] ->
+      G1 = [] /\ G2 = [].
+  Proof.
+    intros G1 G2 J.
+    invc J; cbn; auto.
+    discriminate.
+  Qed.
+
+  Notation empty := empty_internal.
+End join.
+Notation join := join.join.
+
+Module big_joinable.
+  Definition big_joinable n Gs :=
+    Forall (fun G => length G = n) Gs /\
+    ForallOrdPairs joinable Gs.
+
+  Lemma unroll :
+    forall n G Gs,
+      big_joinable n (G :: Gs) <->
+      length G = n /\
+      Forall (joinable G) Gs /\
+      big_joinable n Gs .
+  Proof.
+    intros n G Gs.
+    split.
+    - intros [L Js].
+      invc L.
+      invc Js.
+      unfold big_joinable.
+      intuition.
+    - intros (L & F & BJA).
+      unfold big_joinable in *.
+      intuition.
+      constructor; auto.
+  Qed.
+
+  Lemma extend :
+    forall n Gs ty,
+      big_joinable n Gs ->
+      big_joinable (S n) ((Some ty :: empty n) :: map (fun G => None :: G) Gs).
+  Proof.
+    intros n Gs ty [L Js].
+    split.
+    - constructor.
+      + cbn. auto using empty_length.
+      + apply Forall_map.
+        eapply Forall_impl; try apply L.
+        cbn. auto.
+    - constructor.
+      + apply Forall_map.
+        eapply Forall_impl; try apply L.
+        auto using joinable.cons_intro, joinable_one.None_r, joinable.empty_l.
+      + apply ForallOrdPairs_map.
+        eapply ForallOrdPairs_impl; try apply Js.
+        auto using joinable.cons_None.
+  Qed.
+
+  Lemma extend2 :
+    forall n Gs ty1 ty2,
+      big_joinable n Gs ->
+      big_joinable (S (S n)) ((Some ty1 :: empty (S n)) :: (None :: Some ty2 :: empty n) :: map (fun G => None :: None :: G) Gs).
+  Proof.
+    intros n Gs ty1 ty2 [L Js].
+    rewrite empty.unroll.
+    split.
+    - constructor; [now cbn; auto using empty_length|].
+      constructor; [now cbn; auto using empty_length|].
+      apply Forall_map.
+      eapply Forall_impl; try apply L.
+      cbn. auto.
+    - constructor.
+      + constructor.
+        auto using joinable.cons_intro, joinable_one.None_r, joinable.cons_intro,
+                   joinable_one.None_l, joinable.empty.
+        apply Forall_map.
+        eapply Forall_impl; try apply L.
+        auto using joinable.cons_intro, joinable_one.None_r, joinable.cons_intro,
+                   joinable_one.None_l, joinable.empty_l.
+      + constructor.
+        * apply Forall_map.
+          eapply Forall_impl; try apply L.
+          auto using joinable.cons_intro, joinable_one.None_r, joinable.cons_intro,
+                     joinable_one.None_l, joinable.empty_l.
+        * apply ForallOrdPairs_map.
+          eapply ForallOrdPairs_impl; try apply Js.
+          auto using joinable.cons_None.
+  Qed.
+
+  Lemma project :
+    forall n Gs (G : list (option type.t)),
+      big_joinable n Gs ->
+      big_joinable n (project (empty n) G Gs).
+  Proof.
+    induction Gs; intros G BJ; cbn.
+    - auto.
+    - rewrite unroll in BJ.
+      destruct BJ as (L & FJ & BJ).
+      destruct G as [|[|]]; apply unroll;
+        intuition auto using empty_length;
+        destruct BJ as (FL & FOPJ);
+         auto using Forall_project, joinable.Forall_length, joinable.empty_r.
+  Qed.
+
+  Lemma zero_nil :
+    big_joinable 0 [].
+  Proof.
+    repeat constructor.
+  Qed.
+  Hint Resolve zero_nil.
+
+  Lemma zero_cons :
+    forall l,
+      big_joinable 0 l ->
+      big_joinable 0 ([] :: l).
+  Proof.
+    unfold big_joinable.
+    intros.
+    repeat constructor; intuition.
+    apply joinable.Forall_length with (n := 0); auto.
+  Qed.
+  Hint Resolve zero_cons.
+End big_joinable.
+Notation big_joinable := big_joinable.big_joinable.
+
+Module big_join.
+  Definition big_join n Gs :=
+    List.fold_right join (empty n) Gs.
+
+  Lemma unroll :
+    forall n G Gs,
+      big_join n (G :: Gs) = join G (big_join n Gs).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma is_empty_internal :
+    forall Gs G n,
+      Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
+      is_empty G ->
+      big_joinable n Gs ->
+      big_join n Gs = empty n.
+  Proof.
+    induction 1; intros IE BJA.
+    - now auto.
+    - apply big_joinable.unroll in BJA as (L & F & BJA).
+      rewrite unroll.
+      cbn in IE.
+      destruct y; [now intuition|].
+      rewrite IHForall2; auto.
+      rewrite is_empty_equal_empty with (l := x);
+        subst; auto using join.empty.
+  Qed.
+
+  Lemma is_singleton :
+    forall x ty G Gs n G1,
+      is_singleton x ty G ->
+      Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G ->
+      nth_error Gs x = Some G1 ->
+      big_joinable n Gs ->
+      big_join n Gs = G1.
+  Proof.
+    intros x ty G Gs n G1 IS F NE BJA.
+    revert x ty n G1 IS NE BJA.
+    induction F as [|Γ [ty'|] Gs G]; intros [|x] ty n G1 IS NE BJA;
+      cbn in NE, IS; try solve [intuition];
+        apply big_joinable.unroll in BJA as (L & FJ & BJA);
+        rewrite unroll.
+    - destruct IS as [? IE]. invc NE.
+      erewrite is_empty_internal by eauto.
+      rewrite join.comm by auto using joinable.comm, joinable.is_empty_l, empty_length.
+      now rewrite join.is_empty_l by auto using joinable.is_empty_l, empty_length.
+    - erewrite IHF by eauto.
+      now rewrite join.is_empty_l; [|now eapply Forall_nth_error; eauto|now auto].
+  Qed.
+
+  Lemma map_cons_None :
+    forall n Gs,
+      big_joinable n Gs ->
+      big_join (S n) (map (fun G => None :: G) Gs) = None :: big_join n Gs.
+  Proof.
+    induction Gs; intros BJA.
+    - reflexivity.
+    - cbn[map]. rewrite !unroll.
+      rewrite big_joinable.unroll in BJA.
+      destruct BJA as (L & F & BJA).
+      now rewrite IHGs by auto.
+  Qed.
+
+  Lemma map_cons_None2 :
+    forall n Gs,
+      big_joinable n Gs ->
+      big_join (S (S n)) (map (fun G => None :: None :: G) Gs) = None :: None :: big_join n Gs.
+  Proof.
+    induction Gs; intros BJA.
+    - reflexivity.
+    - cbn [map]. rewrite !unroll.
+      rewrite big_joinable.unroll in BJA.
+      destruct BJA as (L & F & BJA).
+      now rewrite IHGs by auto.
+  Qed.
+
+  Lemma joinable_all :
+    forall n Gs G,
+      Forall (joinable G) Gs ->
+      length G = n ->
+      big_joinable n Gs ->
+      joinable G (big_join n Gs).
+  Proof.
+    induction Gs; intros G F LG BJA.
+    - cbn. auto using joinable.empty_r.
+    - inversion F as [|tmp1 tmp2 JGa FG]; subst tmp1 tmp2; clear F.
+      rewrite big_join.unroll.
+      rewrite big_joinable.unroll in BJA.
+      destruct BJA as (La & Fa & BJA).
+      auto using join.joinable_r.
+  Qed.
+
+  Lemma length :
+    forall Gs n,
+      big_joinable n Gs ->
+      length (big_join n Gs) = n.
+  Proof.
+    induction Gs; intros n BJA.
+    - cbn. auto using empty_length.
+    - rewrite unroll.
+      rewrite big_joinable.unroll in BJA.
+      destruct BJA as (L & F & BJA).
+      now rewrite join.length1 by auto using joinable_all.
+  Qed.
+
+  Lemma extend :
+    forall n Gs ty,
+      big_joinable n Gs ->
+      big_join (S n) ((Some ty :: empty n) :: map (fun G => None :: G) Gs) =
+      Some ty :: big_join n Gs.
+  Proof.
+    intros n Gs ty BJA.
+    rewrite unroll, map_cons_None by assumption.
+    rewrite join.unroll, join_one.None_r.
+    now rewrite join.empty_l by auto using length.
+  Qed.
+
+  Lemma extend2 :
+    forall n Gs ty1 ty2,
+      big_joinable n Gs ->
+      big_join (S (S n)) ((Some ty1 :: empty (S n)) :: (None :: Some ty2 :: empty n) :: map (fun G => None :: None :: G) Gs) =
+      Some ty1 :: Some ty2 :: big_join n Gs.
+  Proof.
+    intros n Gs ty1 ty2 BJA.
+    rewrite empty.unroll.
+    rewrite !unroll, map_cons_None2 by assumption.
+    rewrite !join.unroll, !join_one.None_r, join_one.None_l.
+    rewrite !join.empty_l; auto using length.
+    rewrite join.length1 by auto using joinable.empty_l, length.
+    auto using empty_length.
+  Qed.
+
+  Lemma project_joinable :
+    forall n G1 G2 Gs,
+      joinable G1 G2 ->
+      big_joinable n Gs ->
+      joinable (big_join n (project (empty n) G1 Gs))
+               (big_join n (project (empty n) G2 Gs)).
+  Proof.
+    intros n G1 G2 Gs.
+    revert n G1 G2.
+    induction Gs; intros n G1 G2 J BJA.
+    - apply joinable.empty.
+    - apply big_joinable.unroll in BJA.
+      destruct BJA as (L & F & BJA).
+      rewrite !project_unroll.
+      rewrite !big_join.unroll.
+      destruct G1 as [|[|]], G2 as [|[|]]; invc J;
+        remember (Datatypes.length a) as n in *;
+        try rewrite !join.empty_l by auto using big_join.length, big_joinable.project;
+        auto.
+      + exfalso. eauto using joinable_one.Some2.
+      + apply joinable.comm.
+        apply join.joinable_r;
+          auto using joinable.comm, joinable_all, Forall_project, big_joinable.project,
+                     joinable.empty_r.
+      + apply join.joinable_r;
+          auto using joinable.comm, joinable_all, Forall_project, big_joinable.project,
+                     joinable.empty_r.
+  Qed.
+
+  Lemma project_join :
+    forall n G1 G2 G Gs,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      big_joinable n Gs ->
+      Forall2 empty_if_None Gs G ->
+      join (big_join n (project (empty n) G1 Gs))
+           (big_join n (project (empty n) G2 Gs)) =
+      big_join n Gs.
+  Proof.
+    intros n G1 G2 G Gs.
+    revert n G1 G2 G.
+    induction Gs; intros n G1 G2 G JA J BJA F.
+    - apply join.empty.
+    - apply big_joinable.unroll in BJA.
+      destruct BJA as (L & FL & BJA).
+      rewrite !project_unroll.
+      rewrite !big_join.unroll.
+      inversion F as [|tmp1 b tmp2 G' EIN F']; subst tmp1 tmp2 G; clear F.
+      destruct G1, G2; try solve [discriminate].
+      rewrite join.unroll in *.
+      invc H1.
+      inversion JA as [|? ? ? ? JO JA']; subst; clear JA.
+
+      destruct o, o0;
+        try solve [unfold joinable_one in JO; intuition discriminate];
+        rewrite !join.empty_l by auto using big_join.length, big_joinable.project.
+      + rewrite join.assoc by auto using joinable_all, Forall_project, big_joinable.project, joinable.empty_r.
+        eauto using f_equal2.
+      + rewrite join.comm.
+        rewrite join.assoc by auto using joinable_all, Forall_project, big_joinable.project, joinable.empty_r.
+        rewrite join.comm with (G1 := big_join _ _)
+          by auto using joinable.comm, project_joinable.
+        eauto using f_equal2.
+        apply join.joinable_r;
+          auto using joinable_all, Forall_project, big_joinable.project,
+                     project_joinable, joinable.comm, joinable.empty_r.
+      + rewrite join.is_empty_l with (G1 := a); eauto.
+        apply joinable.is_empty_l; auto.
+        rewrite length; auto.
+  Qed.
+
+  Notation is_empty := is_empty_internal.
+End big_join.
+Notation big_join := big_join.big_join.
 
 Module has_type.
   Inductive t : list (option type.t) -> expr.t -> type.t -> Prop :=
@@ -801,17 +1165,20 @@ Module has_type.
       t (Some ty1 :: G) e ty2 ->
       t G (expr.abs e) (type.lolli ty1 ty2)
   | app : forall G G1 G2 e1 e2 ty1 ty2,
-      join G1 G2 = Some G ->
+      joinable G1 G2 ->
+      join G1 G2 = G ->
       t G1 e1 (type.lolli ty1 ty2) ->
       t G2 e2 ty1 ->
       t G (expr.app e1 e2) ty2
   | both : forall G G1 G2 e1 e2 ty1 ty2,
-      join G1 G2 = Some G ->
+      joinable G1 G2 ->
+      join G1 G2 = G ->
       t G1 e1 ty1 ->
       t G2 e2 ty2 ->
       t G (expr.both e1 e2) (type.tensor ty1 ty2)
   | let_pair : forall G G1 G2 e1 e2 ty1 ty2 ty,
-      join G1 G2 = Some G ->
+      joinable G1 G2 ->
+      join G1 G2 = G ->
       t G1 e1 (type.tensor ty1 ty2) ->
       t (Some ty2 :: Some ty1 :: G2) e2 ty ->
       t G (expr.let_pair e1 e2) ty
@@ -825,14 +1192,15 @@ Module has_type.
   | snd : forall G e ty1 ty2,
       t G e (type.uchoose ty1 ty2) ->
       t G (expr.snd e) ty2
- | inl : forall G e ty1 ty2,
+  | inl : forall G e ty1 ty2,
       t G e ty1 ->
       t G (expr.inl e) (type.ichoose ty1 ty2)
   | inr : forall G e ty1 ty2,
       t G e ty2 ->
       t G (expr.inr e) (type.ichoose ty1 ty2)
   | case : forall G G1 G2 e e1 e2 ty1 ty2 ty,
-      join G1 G2 = Some G ->
+      joinable G1 G2 ->
+      join G1 G2 = G ->
       t G1 e (type.ichoose ty1 ty2) ->
       t (Some ty1 :: G2) e1 ty ->
       t (Some ty2 :: G2) e2 ty ->
@@ -841,7 +1209,8 @@ Module has_type.
       is_empty G ->
       t G expr.tt type.one
   | let_tt : forall G G1 G2 e1 e2 ty,
-      join G1 G2 = Some G ->
+      joinable G1 G2 ->
+      join G1 G2 = G ->
       t G1 e1 type.one ->
       t G2 e2 ty ->
       t G (expr.let_tt e1 e2) ty
@@ -860,7 +1229,7 @@ Module has_type.
       has_opt_type (empty n) e None.
   Proof.
     unfold has_opt_type.
-    auto using is_empty_empty.
+    auto.
   Qed.
   Hint Resolve has_opt_type_None.
 
@@ -905,10 +1274,10 @@ Module has_type.
     + simpl in E. destruct c; [now intuition|now auto].
   Qed.
 
-  Lemma Forall3_has_opt_type_Forall2_None_is_empty :
+  Lemma Forall3_has_opt_type_Forall2_empty_if_None :
     forall Gs rho G,
       Forall3 has_opt_type Gs rho G ->
-      Forall2 (fun Γ oty => oty = None -> is_empty Γ) Gs G.
+      Forall2 empty_if_None Gs G.
   Proof.
     induction 1; constructor; auto.
     now intros ?; subst c.
@@ -921,15 +1290,14 @@ Module has_type.
         t (splice n (empty n') G) (expr.shift n n' e) ty.
   Proof.
     induction 1; simpl expr.shift; intros n n';
-      try solve [econstructor; eauto using join_splice].
-    - constructor. auto using is_singleton_splice.
+      try solve [eauto using joinable.splice_empty, join.splice_empty].
+    - constructor. now auto using is_singleton_splice.
     - constructor. apply IHt with (n := S n).
-    - econstructor; [|now eauto|now apply IHt2 with (n := S (S n))].
-      now eauto using join_splice.
-    - econstructor; [|now eauto| apply IHt2 with (n := S n)|apply IHt3 with (n := S n)].
-      now eauto using join_splice.
-    - constructor.
-      now apply is_empty_splice.
+    - econstructor; [| |now eauto| apply IHt2 with (n := S (S n))];
+        eauto using joinable.splice_empty, join.splice_empty.
+    - econstructor; [| |now eauto|apply IHt2 with (n := S n)|apply IHt3 with (n := S n)];
+        eauto using joinable.splice_empty, join.splice_empty.
+    - constructor. now apply is_empty_splice.
   Qed.
 
   Lemma shift' :
@@ -950,6 +1318,15 @@ Module has_type.
     now apply shift' with (n := 1).
   Qed.
 
+  Lemma shift_cons2 :
+    forall G e ty,
+      t G e ty ->
+      t (None :: None :: G) (expr.shift 0 2 e) ty.
+  Proof.
+    intros.
+    now apply shift' with (n := 2).
+  Qed.
+
   Lemma shift_cons_opt_None :
     forall G e ty,
       has_opt_type G e ty ->
@@ -958,6 +1335,16 @@ Module has_type.
     unfold has_opt_type.
     intros G e [ty|] H; [|now idtac].
     now apply shift_cons.
+  Qed.
+
+  Lemma shift_cons_opt_None2 :
+    forall G e ty,
+      has_opt_type G e ty ->
+      has_opt_type (None :: None :: G) (expr.shift 0 2 e) ty.
+  Proof.
+    unfold has_opt_type.
+    intros G e [ty|] H; [|now idtac].
+    now apply shift_cons2.
   Qed.
 
   Lemma shift_cons_opt_None_skip :
@@ -970,123 +1357,106 @@ Module has_type.
     now apply shift_cons_opt_None.
   Qed.
 
-  Let FHO := Forall3_has_opt_type_Forall2_None_is_empty.
+  Let FHO := Forall3_has_opt_type_Forall2_empty_if_None.
+
+  Lemma has_opt_type_extend :
+    forall Gs rho G n ty,
+      Forall3 has_opt_type Gs rho G ->
+      Forall3 has_opt_type
+              ((Some ty :: empty n) :: map (fun G => None :: G) Gs)
+              (expr.var 0 :: map (expr.shift 0 1) rho)
+              (Some ty :: G).
+  Proof.
+    intros Gs rho G n ty F.
+    constructor.
+    now simpl; auto.
+    eauto using Forall3_map1, Forall3_map2, Forall3_impl, shift_cons_opt_None.
+  Qed.
+
+  Lemma has_opt_type_extend2 :
+    forall Gs rho G n ty1 ty2,
+      Forall3 has_opt_type Gs rho G ->
+      Forall3 has_opt_type
+              ((Some ty1 :: empty (S n)) :: (None :: Some ty2 :: empty n) :: map (fun G => None :: None :: G) Gs)
+              (expr.var 0 :: expr.var 1 :: map (expr.shift 0 2) rho)
+              (Some ty1 :: Some ty2 :: G).
+  Proof.
+    intros Gs rho G n ty F.
+    constructor.
+    now simpl; auto.
+    constructor.
+    now simpl; auto.
+    eauto using Forall3_map1, Forall3_map2, Forall3_impl, shift_cons_opt_None2.
+  Qed.
+
+  Lemma Forall3_project1 :
+    forall Gs rho G G1 G2 n,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      Forall3 has_opt_type Gs rho G ->
+      Forall3 has_opt_type (project (empty n) G1 Gs) rho G1.
+  Proof.
+    intros.
+    erewrite <- join.project1 by eauto.
+    auto using Forall3_project.
+  Qed.
+
+  Lemma Forall3_project2 :
+    forall Gs rho G G1 G2 n,
+      joinable G1 G2 ->
+      join G1 G2 = G ->
+      Forall3 has_opt_type Gs rho G ->
+      Forall3 has_opt_type (project (empty n) G2 Gs) rho G2.
+  Proof.
+    intros.
+    erewrite <- join.project2 by eauto.
+    auto using Forall3_project.
+  Qed.
+
+  Create HintDb subst_db.
+  Hint Resolve big_join.extend has_opt_type_extend big_joinable.extend
+               big_join.extend2 has_opt_type_extend2 big_joinable.extend2
+               big_joinable.project big_join.project_joinable
+               big_join.length big_joinable.project eq_sym
+               big_join.project_join FHO Forall3_project1 Forall3_project2
+     : subst_db.
 
   Lemma subst :
     forall G e ty,
       has_type.t G e ty ->
       forall G' Gs rho n,
         Forall3 has_opt_type Gs rho G ->
-        big_join n Gs = Some G' ->
-        n = List.length G' ->
+        big_joinable n Gs ->
+        big_join n Gs = G' ->
         has_type.t G' (expr.subst rho e) ty.
   Proof.
-    induction 1; intros G' Gs rho n F J EN; cbn [expr.subst]; eauto.
+    induction 1; intros G' Gs rho n F BJA BJ; cbn [expr.subst]; eauto.
     - simpl expr.subst.
       pose proof is_singleton_nth_error1 _ _ _ H as NEty.
       destruct (Forall3_nth_error3 _ F NEty) as [G1 [e [NEG1 [NEe HT]]]].
       unfold expr.t in *.
       apply has_opt_type_Some in HT.
       rewrite NEe.
-      erewrite <- big_join_length with (n := _) in J by eauto.
-      eapply big_join_is_singleton in J; eauto using FHO.
+      erewrite big_join.is_singleton in BJ; eauto using FHO.
       congruence.
-    - constructor.
-      apply IHt with (n := S n)
-                     (Gs := (Some ty1 :: empty (length G')) :: map (fun G => None :: G) Gs).
-      + constructor.
-        now simpl; auto.
-        eauto using Forall3_map1, Forall3_map2, Forall3_impl, shift_cons_opt_None.
-      + now rewrite big_join_unroll, big_join_map_cons_None, J, join_unroll, join_empty_l.
-      + simpl. congruence.
-    - pose proof big_join_project _ _ _ H J (FHO F) as (G1' & G2' & J1' & J2' & J').
-      econstructor; [| eapply IHt1 | eapply IHt2 ]; subst;
-        try solve [eauto using join_length1, join_length2].
-      now erewrite <- join_project1 by eauto; auto.
-      now erewrite <- join_project2 by eauto; auto.
-    - pose proof big_join_project _ _ _ H J (FHO F) as (G1' & G2' & J1' & J2' & J').
-      econstructor; [| eapply IHt1| eapply IHt2]; subst;
-        try solve [eauto using join_length1, join_length2].
-      now erewrite <- join_project1 by eauto; auto.
-      now erewrite <- join_project2 by eauto; auto.
-    - pose proof big_join_project _ _ _ H J (FHO F) as (G1' & G2' & J1' & J2' & J').
-      assert (n = length G2') by (subst; eauto using join_length2, eq_sym).
-      econstructor; [| eapply IHt1|
-                     eapply IHt2 with (n := S (S n))
-                                      (Gs := (Some ty2 :: empty (S n)) ::
-                                             (None :: Some ty1 :: empty n) ::
-                                             (map (fun G => None :: None :: G)
-                                                  (project (empty n) G2 Gs)))];
-      try solve [subst; eauto using join_length1, join_length2].
-      + now erewrite <- join_project1 by eauto; auto.
-      + constructor; [now simpl; auto |].
-        constructor; [now simpl; auto |].
-
-        erewrite <- join_project2 with (G2 := G2) at 2 by eauto.
-        eauto 10 using Forall3_map1, Forall3_map2, Forall3_project, Forall3_impl,
-                       shift_cons_opt_None_skip, shift_cons_opt_None.
-      + do 2 rewrite big_join_unroll.
-        rewrite big_join_map_cons_None2, J2'.
-        do 2 rewrite join_unroll.
-        cbn[join_one].
-        rewrite join_empty_l' by congruence.
-        rewrite join_unroll.
-        cbn[join_one].
-        now rewrite join_empty_l' by (cbn; congruence).
-      + cbn. congruence.
-    - pose proof big_join_project _ _ _ H J (FHO F) as (G1' & G2' & J1' & J2' & J').
-      econstructor; [now eauto| | | ].
-      + eapply IHt1; [| now eauto | now subst; eauto using join_length1].
-        now erewrite <- join_project1 by eauto; auto.
-      + apply IHt2 with (n := S n) (Gs := (Some ty1 :: empty n) ::
-                                          map (fun G => None :: G) (project (empty n) G2 Gs));
-          [| |now subst; simpl; eauto using join_length2].
-        constructor; [now auto|].
-        apply Forall3_map1.
-        apply Forall3_map2.
-        erewrite <- join_project2 by eauto.
-        apply Forall3_project.
-        now auto using shift_cons_opt_None.
-        eapply Forall3_impl. 2: eassumption.
-        now auto using shift_cons_opt_None.
-
-        rewrite big_join_unroll.
-        rewrite big_join_map_cons_None.
-        rewrite J2'.
-        rewrite join_unroll.
-        cbn[join_one].
-        now rewrite join_empty_l' by (subst; eauto using join_length2, eq_sym).
-      + apply IHt3 with (n := S n) (Gs := (Some ty2 :: empty n) ::
-                                          map (fun G => None :: G) (project (empty n) G2 Gs));
-          [| |now subst; simpl; eauto using join_length2].
-        constructor; [now auto|].
-        apply Forall3_map1.
-        apply Forall3_map2.
-        erewrite <- join_project2 by eauto.
-        apply Forall3_project.
-        now auto using shift_cons_opt_None.
-        eapply Forall3_impl. 2: eassumption.
-        now auto using shift_cons_opt_None.
-
-        rewrite big_join_unroll.
-        rewrite big_join_map_cons_None.
-        rewrite J2'.
-        rewrite join_unroll.
-        cbn[join_one].
-        now rewrite join_empty_l' by (subst; eauto using join_length2, eq_sym).
-    - econstructor.
-      eapply big_join_is_empty; [|now eauto].
-      now eauto using has_opt_type_empty.
-    - pose proof big_join_project _ _ _ H J (FHO F) as (G1' & G2' & J1' & J2' & J').
-      econstructor; [now eauto| |].
-      + eapply IHt1; [|now eauto|].
-        erewrite <- join_project1 by eauto.
-        apply Forall3_project; auto.
-        subst. eauto using join_length1.
-      + eapply IHt2; [|now eauto|].
-        erewrite <- join_project2 by eauto.
-        apply Forall3_project; auto.
-        subst. eauto using join_length2.
+    - apply abs; eapply IHt; subst; eauto with subst_db.
+    - eapply app with (G1 := big_join n (project (empty n) G1 Gs));
+        [| |eapply IHt1|eapply IHt2];
+        subst; eauto 5 with subst_db.
+    - eapply both with (G1 := big_join n (project (empty n) G1 Gs));
+        [| |eapply IHt1|eapply IHt2];
+        subst; eauto with subst_db.
+    - eapply let_pair with (G1 := big_join n (project (empty n) G1 Gs));
+        [| |eapply IHt1|eapply IHt2];
+        subst; eauto with subst_db.
+    - eapply case with (G1 := big_join n (project (empty n) G1 Gs));
+        [| | eapply IHt1| eapply IHt2 | eapply IHt3]; subst; eauto with subst_db.
+    - apply tt.
+      erewrite big_join.is_empty in BJ; eauto using FHO.
+      now subst.
+    - eapply let_tt with (G1 := big_join n (project (empty n) G1 Gs));
+        [| |eapply IHt1|eapply IHt2];
+        subst; eauto with subst_db.
   Qed.
 End has_type.
 
@@ -1224,6 +1594,13 @@ Module step.
   Hint Resolve star_app2 star_app1 star_refl.
 End step.
 
+Ltac break_join :=
+ match goal with
+ | [ H : join _ _ = [] |- _ ] =>
+   apply join.nil_elim in H;
+   destruct H; subst
+ end.
+
 Lemma preservation :
   forall G e ty,
     has_type.t G e ty ->
@@ -1239,5 +1616,5 @@ Proof.
     end;
     try break_join;
     eauto;
-    eapply has_type.subst; eauto; auto.
+    eapply has_type.subst with (n := 0); eauto.
 Qed.
