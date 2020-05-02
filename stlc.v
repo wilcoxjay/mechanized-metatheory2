@@ -301,7 +301,7 @@ Module step.
       t e1 e1' ->
       t (expr.If e1 e2 e3) (expr.If e1' e2 e3)
   .
-  Hint Constructors t.
+  Hint Constructors t : core.
 
   Definition star : expr.t -> expr.t -> Prop := clos_refl_trans_n1 _ t.
 
@@ -376,7 +376,7 @@ Module step.
     constructor.
   Qed.
 
-  Hint Resolve star_app2 star_app1 star_refl.
+  Hint Resolve star_app2 star_app1 star_refl : core.
 
   Lemma value :
     forall v,

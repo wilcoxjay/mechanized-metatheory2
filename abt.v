@@ -333,8 +333,8 @@ Module Type ABT.
   End basis_util.
 End ABT.
 
-Module abt (O : OPERATOR) : ABT with Module O := O.
-  Module O := O.
+Module abt (O_ : OPERATOR) : ABT with Module O := O_.
+  Module O := O_.
   Local Unset Elimination Schemes.
   Inductive t : Type :=
   | var (x : nat) : t

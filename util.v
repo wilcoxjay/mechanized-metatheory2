@@ -4,7 +4,7 @@ Require Export Relations.Relations.
 Export ListNotations.
 Set Implicit Arguments.
 
-Hint Constructors Forall Forall2.
+Hint Constructors Forall Forall2 : core.
 
 Ltac break_match :=
   match goal with
@@ -338,7 +338,7 @@ Section Forall3.
     congruence.
   Qed.
 End Forall3.
-Hint Constructors Forall3.
+Hint Constructors Forall3 : core.
 
 Lemma Forall3_map1 :
   forall A A' B C (P : A -> B -> C -> Prop) (f : A' -> A) l1 l2 l3,
@@ -839,7 +839,7 @@ Proof.
   - destruct l; [now auto|].
     destruct o; auto.
 Qed.
-Hint Resolve Forall3_project.
+Hint Resolve Forall3_project : core.
 
 Lemma partial_zip_project :
   forall A B (f : option A -> B -> option (option A)) l1 l2 l3,
