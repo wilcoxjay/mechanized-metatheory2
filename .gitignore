@@ -2,5 +2,8 @@
 *.vo
 *.glob
 *.v.d
+*.vok
+*.vos
 Makefile.coq
 Makefile.coq.conf
+.Makefile.coq.d
