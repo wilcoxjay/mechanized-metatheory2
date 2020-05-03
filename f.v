@@ -684,4 +684,42 @@ Module step.
     inversion Star; subst; auto.
     exfalso; eauto using value.
   Qed.
+
+  Lemma det :
+    forall e e1 e2,
+      t e e1 ->
+      t e e2 ->
+      e1 = e2.
+  Proof.
+    intros e e1 e2 Step1 Step2.
+    generalize dependent e2.
+    induction Step1; intros e4 Step4; inversion Step4; subst; try reflexivity;
+      try solve [ exfalso; eauto using value ];
+      try match goal with
+          | [ H : _ |- _ ] => solve [inversion H; try solve [ exfalso; eauto using value ]]
+          end;
+      auto using f_equal, f_equal2, f_equal3.
+  Qed.
+
+  Lemma star_det :
+    forall e v1 v2,
+      value.t v1 ->
+      value.t v2 -> 
+      star e v1 ->
+      star e v2 ->
+      v1 = v2.
+  Proof.
+    intros e v1 v2 V1 V2 Star1 Star2.
+    apply clos_rtn1_rt in Star1.
+    apply clos_rtn1_rt in Star2.
+    apply clos_rt_rt1n in Star1.
+    apply clos_rt_rt1n in Star2.
+    induction Star1; invc Star2.
+    - reflexivity.
+    - exfalso. eauto using value.
+    - exfalso. eauto using value.
+    - assert (y = y0) by eauto using det.
+      subst y0.
+      auto.
+  Qed.
 End step.

@@ -846,3 +846,188 @@ Proof.
   - now apply has_sem_type.If; auto.
 Qed.
 Print Assumptions fundamental.
+
+Corollary fundamental_closed :
+  forall e ty,
+    has_type.t 0 [] e ty ->
+    E ty [] e e.
+Proof.
+  intros e ty HT.
+  replace e with (expr.subst (expr.identity_subst 0) e)
+    by now rewrite expr.subst_identity.
+  eapply fundamental; try apply HT; try constructor.
+Qed.
+
+Corollary termination :
+  forall e ty,
+    has_type.t 0 [] e ty ->
+    exists v, value.t v /\ step.star e v.
+Proof.
+  intros e ty HT.
+  destruct (fundamental_closed HT) as [v [Star [Val _]]].
+  eauto.
+Qed.
+
+Corollary there_are_two_bools_and_they_don't_change_their_mind :
+  forall e u1 u2 v1 v2 tyu tyv, 
+    has_type.t 0 [] e (type.all (type.arrow (type.var 0)
+                                            (type.arrow (type.var 0) (type.var 0)))) ->
+
+    has_type.t 0 [] u1 tyu -> 
+    has_type.t 0 [] u2 tyu ->
+    has_type.t 0 [] v1 tyv -> 
+    has_type.t 0 [] v2 tyv ->
+
+    value.t u1 ->
+    value.t u2 ->
+    value.t v1 ->
+    value.t v2 ->
+    [\/ [/\ step.star (expr.app (expr.app (expr.tyapp e) u1) u2) u1 
+        & step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v1]
+    |  [/\ step.star (expr.app (expr.app (expr.tyapp e) u1) u2) u2 
+        & step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v2]].
+Proof.
+  intros e u1 u2 v1 v2 tyu tyv HTe HTu1 HTu2 HTv1 HTv2 Vu1 Vu2 Vv1 Vv2.
+  apply fundamental_closed in HTe.
+  destruct HTe as (w1 & w2 & [StarW1 StarW2 Vw1 Vw2 Vw1w2]).
+  assert (w1 = w2)
+    by eauto using step.star_det.
+  subst w2.
+  cbn [V] in Vw1w2.
+  destruct Vw1w2 as [WFw1 _ (body1 & body2 & [Eb1 Eb2 HS])].
+  assert (body1 = body2) by congruence. subst body2 w1.
+  set (S := fun x y => (x = u1 /\ y = v1) \/ (x = u2 /\ y = v2)).
+  assert (candidate.wf S) as SWF.
+  { unfold candidate.wf. subst S. simpl. intros.
+    split; intuition; subst; auto.
+    - now apply has_type.t_expr_wf in HTu1.
+    - now apply has_type.t_expr_wf in HTu2.
+    - now apply has_type.t_expr_wf in HTv1.
+    - now apply has_type.t_expr_wf in HTv2.
+  }
+  specialize (HS S SWF).
+  destruct HS as (z1 & z2 & [StarZ1 StarZ2 Vz1 Vz2 [WfZ1 WfZ2 (zbody1 & zbody2 & [Ez1 Ez2 Hz])]]).
+  assert (z1 = z2) by (eauto using step.star_det). subst z2.
+  assert (zbody1 = zbody2) by congruence. subst zbody2 z1.
+  specialize (Hz u1 v1).
+  assert (S u1 v1) as HSu1v1.
+  {
+    subst S. simpl. intuition.
+  }
+
+  specialize (Hz HSu1v1).
+  destruct Hz as (a1 & a2 & [StarA1 StarA2 Va1 Va2 [WFa1 WFa2 (abody1 & abody2 & [EA1 EA2 Ha])]]).
+  subst a1 a2.
+  specialize (Ha u2 v2).
+  assert (S u2 v2) as HSu2v2.
+  {
+    subst S. simpl. intuition.
+  }
+  specialize (Ha HSu2v2).
+  destruct Ha as (b1 & b2 & [StarB1 StarB2 Vb1 Vb2 Vb1b2]).
+  assert (step.star (expr.app (expr.app (expr.tyapp e) u1) u2) b1).
+  {
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.star_app1.
+    eapply step.star_tyapp.
+    eassumption.
+  
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.star_app1.
+    eapply step.step_l.
+    eapply step.tybeta.
+    eassumption.
+
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.step_l.
+    eapply step.beta.
+    assumption.
+    eassumption.
+
+    eapply step.star_trans.
+    eapply step.step_l.
+    eapply step.beta.
+    assumption.
+    eassumption.
+    constructor.
+  } 
+  assert (step.star (expr.app (expr.app (expr.tyapp e) v1) v2) b2).
+  {
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.star_app1.
+    eapply step.star_tyapp.
+    eassumption.
+  
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.star_app1.
+    eapply step.step_l.
+    eapply step.tybeta.
+    eassumption.
+
+    eapply step.star_trans.
+    eapply step.star_app1.
+    eapply step.step_l.
+    eapply step.beta.
+    assumption.
+    eassumption.
+
+    eapply step.star_trans.
+    eapply step.step_l.
+    eapply step.beta.
+    assumption.
+    eassumption.
+    constructor.
+  }
+  destruct Vb1b2; [left|right]; intuition; subst; assumption.
+Qed.
+
+Corollary there_are_two_bools :
+  forall e,
+    has_type.t 0 [] e (type.all (type.arrow (type.var 0)
+                                            (type.arrow (type.var 0) (type.var 0)))) ->
+    [\/ forall v1 v2 ty,
+        has_type.t 0 [] v1 ty ->
+        has_type.t 0 [] v2 ty ->
+        value.t v1 ->
+        value.t v2 ->
+        step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v1
+    | forall v1 v2 ty,
+        has_type.t 0 [] v1 ty ->
+        has_type.t 0 [] v2 ty ->
+        value.t v1 ->
+        value.t v2 ->
+        step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v2
+    ].
+Proof.
+  intros e HTe.
+  specialize (@there_are_two_bools_and_they_don't_change_their_mind 
+                e expr.tt expr.ff expr.tt expr.ff type.bool type.bool) as T.
+  specialize (T HTe ltac:(constructor) ltac:(constructor) ltac:(constructor) ltac:(constructor)
+                    ltac:(constructor) ltac:(constructor) ltac:(constructor) ltac:(constructor)).
+  destruct T as [[? ?]|[? ?]]; [left|right]; intros v1 v2 ty HTv1 HTv2 Vv1 Vv2.
+  - specialize (@there_are_two_bools_and_they_don't_change_their_mind e expr.tt expr.ff v1 v2 type.bool ty) as T.
+    specialize (T HTe ltac:(constructor) ltac:(constructor) ltac:(assumption) ltac:(assumption)
+                      ltac:(constructor) ltac:(constructor) ltac:(assumption) ltac:(assumption)).
+    intuition.
+    exfalso.
+    assert (expr.tt = expr.ff).
+    eapply step.star_det; eauto.
+    constructor.
+    constructor.
+    discriminate.
+  - specialize (@there_are_two_bools_and_they_don't_change_their_mind e expr.tt expr.ff v1 v2 type.bool ty) as T.
+    specialize (T HTe ltac:(constructor) ltac:(constructor) ltac:(assumption) ltac:(assumption)
+                      ltac:(constructor) ltac:(constructor) ltac:(assumption) ltac:(assumption)).
+    intuition.
+    exfalso.
+    assert (expr.tt = expr.ff).
+    eapply step.star_det; eauto.
+    constructor.
+    constructor.
+    discriminate.
+Qed.

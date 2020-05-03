@@ -845,8 +845,8 @@ Proof.
   subst v''.
   specialize (Hbody'' v2 (or_intror eq_refl)).
   destruct Hbody'' as [v''' [Star''' [Val''' Sv''']]].
-  destruct Sv'''; [left|right]; subst v'''.
-  - eapply step.star_trans.
+  assert (step.star (expr.app (expr.app (expr.tyapp e) v1) v2) v''').
+  { eapply step.star_trans.
     apply step.star_app1.
     eapply step.star_trans.
     apply step.star_app1.
@@ -862,21 +862,8 @@ Proof.
     eapply step.step_l.
     apply step.beta. assumption.
     assumption.
-  - eapply step.star_trans.
-    apply step.star_app1.
-    eapply step.star_trans.
-    apply step.star_app1.
-    eapply step.star_trans.
-    apply step.star_tyapp.
-    eauto.
-    eapply step.step_l.
-    apply step.tybeta.
-    eauto.
-    eapply step.step_l.
-    apply step.beta. assumption.
-    eauto.
-    eapply step.step_l.
-    apply step.beta. assumption.
-    assumption.
+  }
+  
+  destruct Sv'''; [left|right]; subst v'''; assumption.
 Qed.
 
