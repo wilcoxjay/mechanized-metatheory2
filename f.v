@@ -383,7 +383,7 @@ Module has_type.
         apply type.wf_identity_subst.
     - apply type.wf_subst_inv in H1.
       simpl in *. rewrite type.identity_subst_length in *.
-      now rewrite Nat.max_r in * by omega.
+      now rewrite Nat.max_r in * by lia.
     - subst ty2.
       auto using type.wf_shift_inv', type.wf_map_shift'.
   Qed.
@@ -475,13 +475,13 @@ Module has_type.
       apply type.wf_subst_inv in HT.
       simpl in *.
       rewrite type.identity_subst_length in *.
-      now rewrite Nat.max_r in * by omega.
+      now rewrite Nat.max_r in * by lia.
     - cbn[type.shift] in *.
       assert (type.wf (S n) ty1) as WFty1 by now apply t_type_wf in HT1.
       econstructor.
       now apply IHHT1.
 
-      specialize (IHHT2 (type.wf_cons WFty1 WFG) (S c) ltac:(omega)).
+      specialize (IHHT2 (type.wf_cons WFty1 WFG) (S c) ltac:(lia)).
       rewrite Nat.add_succ_r in IHHT2.
       cbn[map] in IHHT2.
       rewrite type.map_shift_map_shift'.
@@ -502,7 +502,7 @@ Module has_type.
   Proof.
     intros n G e ty HT.
     apply tyshift with (n := n) (d := 1); auto.
-    omega.
+    lia.
   Qed.
 End has_type.
 

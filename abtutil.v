@@ -241,7 +241,7 @@ Module abt_util (SB : SYNTAX_BASIS).
     apply wf_subst_inv in WF.
     simpl in *.
     rewrite identity_subst_length in *.
-    now rewrite Nat.max_r in * by omega.
+    now rewrite Nat.max_r in * by lia.
   Qed.
 
   Lemma wf_shift_inv :
@@ -523,7 +523,7 @@ Module abt_util (SB : SYNTAX_BASIS).
   Proof.
     intros c d n e1 e2 LE WF.
 
-    replace (d + n) with (c + (d + (n - c))) by omega.
+    replace (d + n) with (c + (d + (n - c))) by lia.
     rewrite identity_subst_app.
     rewrite SIS_app.
     rewrite app_comm_cons.
@@ -532,7 +532,7 @@ Module abt_util (SB : SYNTAX_BASIS).
     + rewrite map_shift_identity_subst_split by assumption.
       now rewrite Nat.add_comm.
     + rewrite app_length, identity_subst_length, SIS_length.
-      now replace (c + (n - c)) with n by omega.
+      now replace (c + (n - c)) with n by lia.
   Qed.
 
   Lemma wf_cons :

@@ -302,7 +302,7 @@ Module Type ABT.
         repeat break_match; subst; simpl in *; intuition;
         repeat match goal with
                | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
-               end; simpl in *; try omega;
+               end; simpl in *; try lia;
           repeat f_equal; eauto.
     
     Ltac prove_shift_to_abt_comm :=
@@ -512,11 +512,11 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                shift_binders c2 d2 (shift_binders c1 d1 bs) =
                shift_binders (c1 + d2) d1 (shift_binders c2 d2 bs));
       intros c1 d1 c2 d2 LE; simpl; f_equal; auto.
-    - repeat do_ltb; omega.
+    - repeat do_ltb; lia.
     - simpl.
-      rewrite IHe by omega.
+      rewrite IHe by lia.
       f_equal.
-      omega.
+      lia.
   Qed.
 
   Lemma shift_nop :
@@ -538,8 +538,8 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                        shift_binders c d bs = bs);
       simpl; intros c d n LE WF; f_equal; intuition eauto.
     - destruct (Nat.ltb_spec x c); auto.
-      omega.
-    - eapply IHe; try eassumption. omega.
+      lia.
+    - eapply IHe; try eassumption. lia.
   Qed.
 
   Lemma shift_nop' :
@@ -556,8 +556,8 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
   Proof.
     intros c d e.
-    rewrite shift_shift with (c2 := 0) by omega.
-    f_equal. omega.
+    rewrite shift_shift with (c2 := 0) by lia.
+    f_equal. lia.
   Qed.
 
   Lemma map_shift_map_shift' :
@@ -580,9 +580,9 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     - reflexivity.
     - f_equal.
       + destruct (Nat.ltb_spec 0 c); auto.
-        omega.
-      + destruct c; [omega|].
-        rewrite <- IHn with (c := c) (d := d) at 2 by omega.
+        lia.
+      + destruct c; [lia|].
+        rewrite <- IHn with (c := c) (d := d) at 2 by lia.
         auto using map_shift_map_shift'.
   Qed.
 
@@ -595,13 +595,13 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     intros.
     rewrite map_app.
     f_equal.
-    - now rewrite shift_identity_subst by omega.
+    - now rewrite shift_identity_subst by lia.
     - rewrite !map_map.
       apply map_ext.
       intros e.
-      rewrite shift_shift by omega.
+      rewrite shift_shift by lia.
       f_equal.
-      omega.
+      lia.
   Qed.
 
   Hint Rewrite app_length nth_error_map : list.
@@ -638,7 +638,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       simpl; intros c d rho WF; f_equal; intuition; autorewrite with list in *.
     - break_match; auto.
       do_nth_error_Some.
-      intuition omega.
+      intuition lia.
     - rewrite IHe by now rewrite descend_length.
       f_equal.
       now rewrite descend_shift.
@@ -699,7 +699,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                shift_binders c 0 bs = bs);
       simpl; intros c; fold subst_binders shift_binders wf_binders in *;
         f_equal; intuition; autorewrite with list in *.
-    repeat do_ltb; omega.
+    repeat do_ltb; lia.
   Qed.
 
   Lemma shift_merge :
@@ -715,7 +715,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                shift_binders c d2 (shift_binders c d1 bs) = shift_binders c (d2 + d1) bs);
       simpl; intros c d1 d2; fold subst_binders shift_binders wf_binders in *;
         f_equal; intuition; autorewrite with list in *.
-    repeat do_ltb; omega.
+    repeat do_ltb; lia.
   Qed.
 
   Lemma SIS_merge :
@@ -729,7 +729,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     intros e.
     rewrite shift_merge.
     f_equal.
-    omega.
+    lia.
   Qed.
 
   Lemma SIS_unroll :
@@ -746,12 +746,12 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     forall n d, SIS d (S n) = SIS d n ++ [var (d + n)].
   Proof.
     induction n; intros.
-    - unfold SIS. simpl. do 2 f_equal. omega.
+    - unfold SIS. simpl. do 2 f_equal. lia.
     - rewrite !SIS_unroll with (d := d).
       rewrite IHn.
       simpl.
       repeat f_equal.
-      omega.
+      lia.
   Qed.
 
   Lemma subst_identity_subst :
@@ -762,7 +762,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     induction n; simpl; intros rho1 rho2.
     - reflexivity.
     - rewrite SIS_unroll. f_equal.
-      + rewrite nth_error_app2 by omega.
+      + rewrite nth_error_app2 by lia.
         now rewrite minus_diag.
       + fold (SIS 1 n).
         rewrite SIS_merge.
@@ -826,7 +826,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                wf_binders (d + n) (shift_binders c d bs));
       simpl; intros c d n; fold subst_binders shift_binders wf_binders in *;
         f_equal; intuition; autorewrite with list in *.
-    - do_ltb; omega.
+    - do_ltb; lia.
     - specialize (IHe (s + c) d (s + n)).
       intuition.
       now rewrite Nat.add_shuffle3.
@@ -837,7 +837,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       Forall (wf n) (identity_subst n).
   Proof.
     induction n; simpl; constructor.
-    - simpl. omega.
+    - simpl. lia.
     - rewrite Forall_map. eapply Forall_impl; [|apply IHn].
       intros e WF.
       now apply wf_shift with (c := 0) (d := 1).
@@ -923,12 +923,12 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
                 wf_binders (max c (n - d)) bs);
     simpl; intros c d n; fold subst_binders shift_binders wf_binders in *;
         f_equal; intuition; autorewrite with list in *.
-    - do_ltb; do_max_spec; omega.
+    - do_ltb; do_max_spec; lia.
     - apply IHe in H.
       eapply wf_weaken; [|eassumption].
       pose proof Nat.max_spec (s + c) (s + n - d).
       pose proof Nat.max_spec c (n - d).
-      omega.
+      lia.
   Qed.
 
   Lemma wf_subst_inv :
@@ -951,16 +951,16 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       + do_nth_error_Some.
         assert (x < length rho) by (intuition congruence).
         do_max_spec.
-        omega.
+        lia.
       + simpl in *.
         do_max_spec.
-        omega.
+        lia.
     - apply IHe in H.
       rewrite descend_length in *.
       assert (Init.Nat.max (s + n) (s + length rho) = s + Init.Nat.max n (length rho)).
       do_max_spec.
       pose proof Nat.max_spec n (length rho).
-      omega.
+      lia.
       congruence.
   Qed.
 
@@ -1189,7 +1189,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       intros e.
       rewrite shift_merge.
       f_equal.
-      omega.
+      lia.
   Qed.
   
   Lemma ws_identity_subst :
@@ -1248,7 +1248,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     induction rho2; simpl; intros rho1.
     - reflexivity.
     - f_equal.
-      + rewrite nth_error_app2 by omega.
+      + rewrite nth_error_app2 by lia.
         now rewrite Nat.sub_diag.
       + fold (SIS 1 (length rho2)). rewrite SIS_merge. unfold SIS.
         specialize (IHrho2 (rho1 ++ [a])).
@@ -1288,7 +1288,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
         break_match; auto.
         apply nth_error_SIS in Heqo0.
         subst. f_equal.
-        omega.
+        lia.
     - rewrite IHe with (n := n).
       rewrite descend_app, descend_length, SIS_merge.
       now rewrite plus_comm.
@@ -1359,8 +1359,8 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       cbn [map].
       f_equal.
       + simpl.
-        destruct (Nat.ltb_spec d1 c); [omega|reflexivity].
-      + rewrite IHn by omega.
+        destruct (Nat.ltb_spec d1 c); [lia|reflexivity].
+      + rewrite IHn by lia.
         reflexivity.
   Qed.
 
@@ -1371,28 +1371,28 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       SIS d1 (c - d1) ++ SIS (d1 + (c - d1) + d2) (n - (c - d1)).
   Proof.
     induction n; intros d1 d2 c LE.
-    - replace (c - d1) with 0 by omega.
+    - replace (c - d1) with 0 by lia.
       reflexivity.
     - rewrite SIS_unroll.
       cbn[map].
       cbn[shift].
       destruct (Nat.ltb_spec d1 c).
-      + destruct c as [|c]; [omega|].
-        rewrite Nat.sub_succ_l by omega.
+      + destruct c as [|c]; [lia|].
+        rewrite Nat.sub_succ_l by lia.
         cbn[Nat.sub].
         rewrite SIS_unroll.
         cbn[app].
         f_equal.
-        rewrite IHn by omega.
+        rewrite IHn by lia.
         simpl.
         repeat f_equal.
-        omega.
-      + rewrite map_shift_SIS_big_c by omega.
-        replace (c - d1) with 0 by omega.
+        lia.
+      + rewrite map_shift_SIS_big_c by lia.
+        replace (c - d1) with 0 by lia.
         rewrite <- SIS_unroll.
         simpl.
         f_equal.
-        omega.
+        lia.
   Qed.
 
   Lemma map_shift_identity_subst_split :
@@ -1405,7 +1405,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     pose proof (@map_shift_SIS_split n 0 d c) as H.
     rewrite Nat.sub_0_r in *.
     rewrite !SIS_0 in *.
-    rewrite H by omega.
+    rewrite H by lia.
     f_equal.
   Qed.
 
@@ -1423,7 +1423,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       f_equal.
       f_equal.
       f_equal.
-      omega.
+      lia.
   Qed.
 
   Lemma identity_subst_app :

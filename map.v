@@ -75,7 +75,7 @@ Module NatOrderedType : OrderedType with Definition t := nat.
         intros y pf.
         destruct pf; intros e.
         - now rewrite Eqdep_dec.UIP_refl_nat with (x := e).
-        - exfalso. subst. omega.
+        - exfalso. subst. lia.
       }
       intros pf2.
       apply (H x pf2 eq_refl).
@@ -94,7 +94,7 @@ Module NatOrderedType : OrderedType with Definition t := nat.
              end).
       + destruct x.
         * exact I.
-        * intros l1 IH. exfalso. omega.
+        * intros l1 IH. exfalso. lia.
       + intros l1 IH.
         f_equal.
         apply IH.

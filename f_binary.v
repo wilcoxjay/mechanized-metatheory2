@@ -230,7 +230,7 @@ Proof.
   induction ty as [alpha| | | |]; intros d1 d2 d3 v1 v2 F; simpl.
   - destruct (Nat.ltb_spec alpha (length d1)).
     + rewrite !nth_error_app1 by assumption. intuition.
-    + rewrite !nth_error_app2 by omega.
+    + rewrite !nth_error_app2 by lia.
       do_app2_minus.
       now auto.
   - split; intros [WFv1 Wfv2 [body1 [body2 [Ev1 Ev2 Vbody]]]]; (split; [assumption| assumption|]);
@@ -314,16 +314,16 @@ Lemma V_map_identity :
 Proof.
   induction d2; intros d1; simpl; constructor.
   - intros e1 e2.
-    rewrite nth_error_app2 by omega.
+    rewrite nth_error_app2 by lia.
     rewrite Nat.sub_diag.
     replace (length d1 + 0 - length d1)
-       with 0 by omega.
+       with 0 by lia.
     reflexivity.
   - rewrite map_map with (g := type.shift _ _).
     rewrite map_ext
        with (f := (fun x => type.shift 0 (length d1) (type.shift 0 1 x)))
             (g := (fun x => type.shift 0 (S (length d1)) x))
-         by (intros; rewrite type.shift_merge; f_equal; omega).
+         by (intros; rewrite type.shift_merge; f_equal; lia).
     specialize (IHd2 (d1 ++ [a])).
     rewrite app_length in IHd2.
     cbn [length] in IHd2.
@@ -363,11 +363,11 @@ Proof.
     + destruct (Forall2_nth_error1 F Heqo) as [t' [NE' H]].
       unfold candidate.t.
       now rewrite NE'.
-    + pose proof Forall2_length F.
+    + pose proof Forall2_length F as Hlen.
       pose proof nth_error_None d1 alpha.
       pose proof nth_error_None d2 alpha.
-      assert (nth_error d2 alpha = None) by intuition.
-      unfold candidate.t. rewrite H2.
+      assert (nth_error d2 alpha = None) as Hd2 by (rewrite Hlen in *; intuition).
+      unfold candidate.t. rewrite Hd2.
       intuition.
   - specialize (IHty1 d1 d2 F).
     specialize (IHty2 d1 d2 F).
@@ -457,7 +457,7 @@ Proof.
   - rewrite nth_error_map.
     break_match; intuition.
     pose proof nth_error_None D alpha.
-    now firstorder.
+    firstorder. lia.
   - unfold terminating.t.
     destruct WFty as [WFty1 WFty2].
     split; intros [WF1 WF2 [body1 [body2 [E1 E2 H12]]]];

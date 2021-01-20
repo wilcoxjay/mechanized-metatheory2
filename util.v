@@ -1,4 +1,4 @@
-Require Export List Arith Omega.
+Require Export List Arith Lia.
 Require Export Relations.Relations.
 
 Export ListNotations.
@@ -103,7 +103,7 @@ Lemma Forall2_from_forall :
         P y z) ->
     List.Forall2 P l1 l2.
 Proof.
-  induction l1; destruct l2; simpl; intros L HP; try omega; constructor.
+  induction l1; destruct l2; simpl; intros L HP; try lia; constructor.
   - now apply HP with (x := 0).
   - apply IHl1.
     + congruence.
@@ -123,7 +123,7 @@ Proof.
     + reflexivity.
     + simpl in *.
       apply IHl1.
-      omega.
+      lia.
 Qed.
 
 Lemma nth_error_app2 :
@@ -133,8 +133,8 @@ Lemma nth_error_app2 :
 .
 Proof.
   induction l1; intros l2 x H; destruct x; simpl in *; auto.
-  - omega.
-  - now rewrite IHl1 by omega.
+  - lia.
+  - now rewrite IHl1 by lia.
 Qed.
 
 Lemma Forall_nth_error :
@@ -228,7 +228,7 @@ Ltac do_app2_minus :=
   match goal with
   | [  |- context [ ?x + ?r2 - ?r1 - ?r2 ] ] =>
     replace (x + r2 - r1 - r2)
-    with (x - r1) by omega
+    with (x - r1) by lia
   end.
 
 Ltac do_nth_error_Some :=
@@ -416,8 +416,8 @@ Proof.
   intros A l1 l2 l3 n.
   destruct (Nat.ltb_spec n (length l1)).
   - now rewrite !nth_error_app1 by assumption.
-  - rewrite !nth_error_app2 by omega.
-    f_equal. omega.
+  - rewrite !nth_error_app2 by lia.
+    f_equal. lia.
 Qed.
 
 
@@ -550,8 +550,8 @@ Lemma nth_error_nth_set :
 Proof.
   induction n2; destruct n1; destruct l; intros x LT; simpl in *;
     try reflexivity;
-    try omega.
-  rewrite IHn2 by omega.
+    try lia.
+  rewrite IHn2 by lia.
   destruct Nat.eq_dec; auto.
 Qed.
 

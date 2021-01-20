@@ -376,7 +376,7 @@ Lemma is_singleton_splice :
     is_singleton (if x <? n then x else x + n') ty (splice n (empty n') G).
 Proof.
   induction n; intros n' x ty G IS; simpl splice.
-  - destruct (Nat.ltb_spec0 x 0); [omega|].
+  - destruct (Nat.ltb_spec0 x 0); [lia|].
     auto using is_singleton_app.
   - destruct G eqn:EQG; [now exfalso; eapply is_singleton_not_nil; eauto|].
     destruct x.

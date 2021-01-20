@@ -199,7 +199,7 @@ Module has_type.
     - constructor.
       do_ltb.
       + now rewrite nth_error_app1 in * by assumption.
-      + rewrite !nth_error_app2 in * by omega.
+      + rewrite !nth_error_app2 in * by lia.
         now do_app2_minus.
     - constructor.
     - constructor.

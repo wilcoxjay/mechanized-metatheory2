@@ -67,21 +67,21 @@ Module cf_sequent.
       exists e, t (Ω_L ++ Ω ++ Ω_R) e C /\ expr.size e <= expr.size e1 + expr.size e2.
   Proof.
     induction n; intros e1 e2 A Ω Ω_L Ω_R C LT SA SC.
-    - omega.
+    - lia.
     - invc SC.
       + apply app_singleton_middle_inv in H0.
         invc H0.
         rewrite app_nil_r.
-        exists e1. split. auto. omega.
+        exists e1. split. auto. lia.
       + rewrite app_comm_cons in H.
         eapply IHn with (e2 := e) (e1 := e1) in H; eauto.
-        2: simpl in *; omega.
+        2: simpl in *; lia.
         destruct H as [e' [? ?]].
         eexists.
         split.
         econstructor.
         exact H.
-        simpl in *. omega.
+        simpl in *. lia.
       + simpl in *.
         rewrite <- app_ass in H.
         apply app_middle_inv in H.
@@ -91,23 +91,23 @@ Module cf_sequent.
              rewrite app_ass.
              simpl.
              apply under_L; eauto.
-             simpl in *. omega.
+             simpl in *. lia.
           -- simpl in *.
              eapply IHn with (e1 := e0) (e2 := e) (Ω_L := []) in H4; eauto.
-             2: omega.
+             2: lia.
              destruct H4 as [e' [He' Size']].
              simpl in *.
              eapply IHn with (e2 := e3)(e1 := e') in H1; eauto.
-             2: omega.
+             2: lia.
              destruct H1 as [e'' [He'' Size'']].
              rewrite app_ass in *.
              eexists. split. eauto.
-             omega.
+             lia.
           -- simpl in *.
              eapply under_L with (A := A0) in H0; eauto.
              rewrite <- app_ass in H0.
              eapply IHn with (A := prop.under B A0) in H0; eauto.
-             2: simpl in *; omega.
+             2: simpl in *; lia.
              destruct H0 as [? [??]].
              rewrite !app_ass in *.
              rewrite <- app_ass in H0.
@@ -118,11 +118,11 @@ Module cf_sequent.
              eexists.
              split.
              eauto.
-             simpl in *. omega.
+             simpl in *. lia.
           -- eapply under_L with (B := B)(A := A0) in H1; eauto.
              rewrite <- app_ass in H1.
              eapply IHn in H1; [| |eassumption].
-             2: simpl in*; omega.
+             2: simpl in*; lia.
              destruct H1 as [?[??]].
              eexists. split.
              rewrite !app_ass.
@@ -132,59 +132,59 @@ Module cf_sequent.
              apply one_L.
              rewrite !app_ass in *.
              eassumption.
-             simpl in *. omega.
+             simpl in *. lia.
         * apply app_inv in H.
           destruct H as [[W' [? ?]]|[W' [? ?]]]; subst.
           -- apply app_cons_inv in H2.
              destruct H2 as [[? ?]|[W1 [? ?]]]; subst.
              ++ rewrite app_nil_r in *.
                 eapply IHn with (A := A) (Ω_L := []) in H0; [| |eassumption].
-                2: omega.
+                2: lia.
                 destruct H0 as [e' [S' Size']].
                 simpl in S'.
                 eapply under_L with (A := A0) (B := B) in H1; eauto.
                 rewrite !app_ass in *.
                 eexists.
                 split. eauto.
-                simpl in *; omega.
+                simpl in *; lia.
              ++ rewrite !app_ass in *.
                 simpl in *.
                 eapply IHn with (A := A) in H1; eauto.
-                2: omega.
+                2: lia.
                 destruct H1 as [e' [S' Size']].
                 rewrite <- app_ass in S'.
                 rewrite <- app_ass in S'.
                 eapply under_L with (B := B) in S'; eauto.
                 rewrite !app_ass in *.
                 eexists. split. eauto.
-                simpl in *. omega.
+                simpl in *. lia.
           -- eapply IHn with (A := A) in H0; eauto.
-             2: omega.
+             2: lia.
              destruct H0 as [e' [S' Size']].
              eapply under_L with (B := B) in H1; eauto.
              rewrite !app_ass in *.
              eexists. split. eauto.
-             simpl in *. omega.
+             simpl in *. lia.
         * rewrite app_comm_cons' in H1.
           rewrite <- app_ass in H1.
           eapply IHn with (A := A) in H1; eauto.
-          2: omega.
+          2: lia.
           destruct H1 as [e' [S' Size']].
           rewrite !app_ass in *.
           simpl in *.
           eapply under_L with (B := B) in S'; eauto.
           eexists. split. eauto.
-          simpl in *. omega.
+          simpl in *. lia.
       + destruct Ω_L; discriminate.
       + apply app_middle_inv in H.
         destruct H as [[? ? ?]|[W [? ?]]|[W [? ?]]]; subst.
         * invc SA.
           -- eexists. split.
              apply one_L. eauto.
-             simpl in *. omega.
+             simpl in *. lia.
           -- apply one_L in H0.
              eapply IHn with (A := prop.one) in H0; [| |eassumption].
-             2: simpl in *; omega.
+             2: simpl in *; lia.
              destruct H0 as [e' [S' Size']].
              rewrite !app_ass in *.
              simpl in *.
@@ -192,26 +192,26 @@ Module cf_sequent.
              eapply under_L with (B := B) in S'; eauto.
              rewrite !app_ass in *.
              eexists. split. eauto.
-             simpl in *. omega.
+             simpl in *. lia.
           -- eexists. split. eauto.
-             simpl in *. omega.
+             simpl in *. lia.
           -- rewrite app_ass. simpl.
              rewrite <- app_ass.
 
              eapply IHn with (e1 := e0)(e2 := expr.lettt e) in H.
              3: apply one_L; eassumption.
-             2: simpl in *; omega.
+             2: simpl in *; lia.
 
              destruct H as [e' [He' Size']].
              eexists. split.
              apply one_L.
              rewrite !app_ass in *.
              eauto.
-             simpl in *. omega.
+             simpl in *. lia.
         * rewrite app_ass in *.
           simpl in *.
           eapply IHn with (e2 := e) (e1 := e1) in H0; eauto.
-          2: omega.
+          2: lia.
           destruct H0 as [? [? ?]].
           eexists. split.
           rewrite <- app_ass.
@@ -219,17 +219,17 @@ Module cf_sequent.
           apply one_L.
           rewrite !app_ass.
           eauto.
-          simpl in *. omega.
+          simpl in *. lia.
         * rewrite <- app_ass in H0.
           eapply IHn with (e1 := e1) (e2 := e) in H0; eauto.
-          2: simpl in *; omega.
+          2: simpl in *; lia.
           destruct H0 as [? [? ?]].
           eexists. split.
           rewrite !app_ass in *.
           simpl.
           apply one_L.
           eauto.
-          simpl in *. omega.
+          simpl in *. lia.
   Qed.
 
   Theorem cut_admissible :
