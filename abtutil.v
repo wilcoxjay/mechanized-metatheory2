@@ -321,6 +321,14 @@ Module abt_util (SB : SYNTAX_BASIS).
     now rewrite app_length, map_length, identity_subst_length.
   Qed.
 
+  Lemma descend_length1 :
+    forall rho,
+      length (descend 1 rho) = S (length rho).
+  Proof.
+    intros rho.
+    now rewrite descend_length.
+  Qed.
+
   Lemma Forall_wf_to_abt :
     forall n l,
       Forall (wf n) l <-> Forall (A.wf n) (map to_abt l).
@@ -339,6 +347,16 @@ Module abt_util (SB : SYNTAX_BASIS).
     rewrite Forall_wf_to_abt in *.
     rewrite descend_to_abt_comm.
     auto using A.descend_wf.
+  Qed.
+
+  Lemma descend_wf1 :
+    forall n rho,
+      Forall (wf n) rho ->
+      Forall (wf (S n)) (descend 1 rho).
+  Proof.
+    intros n rho F.
+    apply descend_wf with (s := 1).
+    assumption.
   Qed.
 
   Lemma descend_1 :
@@ -567,5 +585,64 @@ Module abt_util (SB : SYNTAX_BASIS).
     intros.
     pose proof @subst_shift e [] [e'] g.
     auto.
+  Qed.
+
+  Lemma subst_shift_app :
+    forall e g1 g2 n1,
+      wf (length g2) e ->
+      length g1 = n1 ->
+      subst (g1 ++ g2) (shift 0 n1 e) = subst g2 e.
+  Proof.
+    intros e g1 g2 n1 WF L. subst n1.
+    pose proof @subst_shift e [] g1 g2.
+    auto.
+  Qed.
+
+  Lemma subst_descend_shift :
+    forall n rho e,
+      wf (length rho) e ->
+      subst (descend n rho) (shift 0 n e) =
+      subst (map (shift 0 n) rho) e.
+  Proof.
+    intros n rho e WF.
+    unfold descend.
+    rewrite subst_shift_app.
+    - reflexivity.
+    - now rewrite map_length.
+    - now rewrite identity_subst_length.
+  Qed.
+
+  Lemma subst_descend_shift_shift_subst :
+    forall n rho e,
+      wf (length rho) e ->
+      subst (descend n rho) (shift 0 n e) =
+      shift 0 n (subst rho e).
+  Proof.
+    intros n rho e WF.
+    now rewrite subst_descend_shift, shift_subst by assumption.
+  Qed.
+
+  Lemma subst_cons_identity_subst_shift_1 :
+    forall n e1 e2,
+      wf n e1 ->
+      subst (e2 :: identity_subst n) (shift 0 1 e1) = e1.
+  Proof.
+    intros n e1 e2 WF.
+    rewrite subst_shift_cons.
+    apply subst_identity.
+    rewrite identity_subst_length.
+    assumption.
+  Qed.
+
+  Lemma map_subst_cons_identity_subst_shift_1 :
+    forall e n g,
+      Forall (wf n) g ->
+      map (fun x => subst (e :: identity_subst n) (shift 0 1 x)) g =
+      map (subst g) (identity_subst (length g)).
+  Proof.
+    intros e n g F.
+    rewrite map_subst_identity_subst.
+    rewrite map_ext_Forall with (g := fun x => x); [ now rewrite map_id |].
+    eauto using Forall_impl, subst_cons_identity_subst_shift_1.
   Qed.
 End abt_util.
