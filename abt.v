@@ -226,6 +226,10 @@ Module Type ABT.
       wf (length g) e ->
       subst (e' :: g) (shift 0 1 e) = subst g e.
 
+  Parameter map_subst_identity_subst :
+    forall rho,
+      map (subst rho) (identity_subst (length rho)) = rho.
+
   Parameter subst_shift :
     forall e rho1 rho2 rho3,
       wf (List.length (rho1 ++ rho3)) e ->

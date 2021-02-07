@@ -174,7 +174,7 @@ Module has_type.
       t G (expr.app e1 e2) ty2
   | If : forall G e1 e2 e3 ty,
       t G e1 type.bool ->
-      t G e2 ty -> 
+      t G e2 ty ->
       t G e3 ty ->
       t G (expr.If e1 e2 e3) ty
   .
@@ -466,6 +466,90 @@ Module step.
       eapply star_value in H; eauto.
   Qed.
 End step.
+
+Module type_safety.
+  Definition safe (e : expr.t) :=
+    value.t e \/
+    exists e',
+      step.t e e'.
+
+  Lemma canonical_forms_arrow :
+    forall G e ty1 ty2,
+      has_type.t G e (type.arrow ty1 ty2) ->
+      value.t e ->
+      exists e',
+        e = expr.abs e'.
+  Proof.
+    intros G e ty1 ty2 HT V.
+    invc HT; invc V; eauto.
+  Qed.
+
+  Lemma canonical_forms_bool :
+    forall G e,
+      has_type.t G e type.bool ->
+      value.t e ->
+      e = expr.tt \/ e = expr.ff.
+  Proof.
+    intros G e HT V.
+    invc HT; invc V; auto.
+  Qed.
+
+  Lemma progress :
+    forall e ty,
+      has_type.t [] e ty ->
+      safe e.
+  Proof.
+    intros e ty HT.
+    remember [] as G eqn:E in *.
+    revert E.
+    induction HT; intro E; subst G; try solve [repeat econstructor];
+      repeat match goal with
+             | [ H : _ |- _ ] => specialize (H eq_refl)
+             end.
+    - destruct x; discriminate.
+    - invc IHHT1; [invc IHHT2|]; try solve [firstorder; unfold safe; eauto].
+      destruct (canonical_forms_arrow _ _ _ _ HT1 ltac:(assumption)) as [b1 ?].
+      subst e1.
+      unfold safe.
+      eauto.
+    - invc IHHT1; [|firstorder; unfold safe; eauto].
+      destruct (canonical_forms_bool _ _ HT1 ltac:(assumption)); subst e1;
+        unfold safe; eauto.
+  Qed.
+
+  Lemma preservation :
+    forall e e' ty,
+      has_type.t [] e ty ->
+      step.t e e' ->
+      has_type.t [] e' ty.
+  Proof.
+    intros e e' ty HT S.
+    remember [] as G eqn:E in *.
+    revert E e' S.
+    induction HT; intros E e' S; subst G; invc S; auto.
+    - invc HT1.
+      eauto using has_type.subst.
+    - econstructor; eauto.
+    - econstructor; eauto.
+    - econstructor; eauto.
+  Qed.
+
+  Theorem type_safety :
+    forall e e' ty,
+      has_type.t [] e ty ->
+      step.star e e' ->
+      safe e'.
+  Proof.
+    intros e e' ty HT S.
+    generalize dependent ty.
+    apply clos_rtn1_rt in S.
+    apply clos_rt_rt1n in S.
+    induction S; intros.
+    - eauto using progress.
+    - eauto using preservation.
+  Qed.
+  Print Assumptions type_safety.
+End type_safety.
 
 Module context.
   Inductive t :=

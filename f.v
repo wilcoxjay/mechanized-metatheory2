@@ -196,10 +196,10 @@ Module expr_basis.
     | var n => A.var n
     | abs e' => A.op exprop.abs [A.bind 1 (to_abt e')]
     | app e1 e2 => A.op exprop.app [A.bind 0 (to_abt e1); A.bind 0 (to_abt e2)]
-    | tyabs e' => A.op exprop.tyabs [A.bind 0 (to_abt e')] 
+    | tyabs e' => A.op exprop.tyabs [A.bind 0 (to_abt e')]
     | tyapp e' => A.op exprop.tyapp [A.bind 0 (to_abt e')]
-    | pack e' => A.op exprop.pack [A.bind 0 (to_abt e')] 
-    | unpack e1 e2 => A.op exprop.unpack [A.bind 0 (to_abt e1); A.bind 1 (to_abt e2)] 
+    | pack e' => A.op exprop.pack [A.bind 0 (to_abt e')]
+    | unpack e1 e2 => A.op exprop.unpack [A.bind 0 (to_abt e1); A.bind 1 (to_abt e2)]
     | tt => A.op exprop.tt []
     | ff => A.op exprop.ff []
     | If e1 e2 e3 => A.op exprop.If [A.bind 0 (to_abt e1);
@@ -344,7 +344,7 @@ Module has_type.
       t n G (expr.tyapp e) (type.subst (ty :: type.identity_subst n) ty_body)
 
   | pack : forall n G e ty_interface ty_rep,
-      type.wf n ty_rep -> 
+      type.wf n ty_rep ->
       t n G e (type.subst (ty_rep :: type.identity_subst n) ty_interface) ->
       t n G (expr.pack e) (type.exist ty_interface)
   | unpack : forall n G e1 e2 ty1 ty2 ty2',
@@ -359,10 +359,11 @@ Module has_type.
       t n G expr.ff type.bool
   | If : forall n G e1 e2 e3 ty,
       t n G e1 type.bool ->
-      t n G e2 ty -> 
+      t n G e2 ty ->
       t n G e3 ty ->
       t n G (expr.If e1 e2 e3) ty
   .
+  Hint Constructors t.
 
   Lemma t_type_wf :
     forall n G e ty,
@@ -422,13 +423,21 @@ Module has_type.
   Qed.
 
   Lemma shift' :
+    forall n G e ty G',
+      t n G e ty ->
+      t n (G' ++ G) (expr.shift 0 (List.length G') e) ty.
+  Proof.
+    intros.
+    now apply shift with (G1 := []).
+  Qed.
+
+  Lemma shift_cons :
   forall n G e ty ty',
     has_type.t n G e ty ->
     has_type.t n (ty' :: G) (expr.shift 0 1 e) ty.
   Proof.
     intros n G e ty ty' HT.
-    apply shift with (G1 := []) (G2 := [ty']) (G3 := G).
-    auto.
+    now apply shift' with (G' := [ty']).
   Qed.
 
   Lemma tyshift :
@@ -504,6 +513,190 @@ Module has_type.
     apply tyshift with (n := n) (d := 1); auto.
     lia.
   Qed.
+
+  Lemma subst :
+    forall n G e ty,
+      t n G e ty ->
+      Forall (type.wf n) G ->
+      forall G' rho,
+        Forall (type.wf n) G' ->
+        List.Forall2 (t n G') rho G ->
+        t n G' (expr.subst rho e) ty.
+  Proof.
+    induction 1; intros WFG G' rho WFG' F; cbn [expr.subst]; eauto.
+    - destruct (Forall2_nth_error2 F H) as [z [Hz Ht]].
+      simpl.
+      unfold expr.t in *. (* ugh *)
+      now rewrite Hz.
+    - eauto 10 using shift_cons, Forall2_impl, Forall2_map_l.
+    - econstructor.
+      apply IHt;
+        eauto using Forall_map_bwd, Forall_impl, type.wf_shift'.
+      apply Forall2_map_r.
+      apply Forall2_from_forall; [now eauto using Forall2_length|].
+      intros a b c B C.
+      apply tyshift'; [assumption|].
+      eapply Forall2_nth_error; eauto.
+    - econstructor; eauto.
+      apply t_type_wf in H; [|assumption].
+      apply IHt2.
+      + eauto using Forall_map_bwd, Forall_impl, type.wf_shift'.
+      + eauto using Forall_map_bwd, Forall_impl, type.wf_shift'.
+      + eauto 10 using Forall2_map_bwd, Forall2_impl, tyshift', shift_cons.
+  Qed.
+
+  Lemma tysubst :
+    forall n G e ty,
+      t n G e ty ->
+      Forall (type.wf n) G ->
+      forall n' delta,
+        length delta = n ->
+        Forall (type.wf n') delta ->
+        t n' (map (type.subst delta) G) e (type.subst delta ty).
+  Proof.
+    induction 1; intros FG n' delta E Fd; subst n; eauto.
+    - constructor.
+      now rewrite nth_error_map, H.
+    - cbn [type.subst map] in *.
+      auto using type.wf_subst.
+    - cbn [type.subst].
+      forward IHt;
+        [eauto using Forall_map_bwd, Forall_impl, type.wf_shift'|].
+      constructor.
+      specialize (IHt (S n') (type.var 0 :: map (type.shift 0 1) delta)).
+      forward IHt; [now simpl; rewrite map_length|].
+      forward IHt.
+      + constructor.
+        * simpl. lia.
+        * eauto using Forall_map_bwd, Forall_impl, type.wf_shift'.
+      + eqapply IHt.
+        rewrite !map_map.
+        apply map_ext_Forall.
+        eapply Forall_impl; [|apply FG].
+        clear.
+        intros ty WF.
+        rewrite type.subst_shift_cons by now rewrite map_length.
+        auto using eq_sym, type.shift_subst.
+    - forward IHt; [assumption|].
+      specialize (IHt n' delta eq_refl Fd).
+      cbn [type.subst] in *.
+      apply has_type.tyapp with (ty := type.subst delta ty) in IHt.
+      + apply t_type_wf in H0; [|assumption].
+        eqapply IHt.
+        rewrite !type.subst_subst.
+        * cbn.
+          f_equal.
+          f_equal.
+          rewrite map_map.
+          rewrite type.map_subst_identity_subst.
+          rewrite map_ext_Forall with (g := fun x => x).
+          now rewrite map_id.
+          eapply Forall_impl; [| now apply Fd].
+          intros t WF.
+          rewrite type.subst_shift_cons.
+          apply type.subst_identity.
+          rewrite type.identity_subst_length.
+          assumption.
+        * cbn.
+          rewrite type.identity_subst_length.
+          assumption.
+        * constructor; [assumption|].
+          apply type.wf_identity_subst.
+        * cbn.
+          rewrite map_length.
+          assumption.
+        * cbn. rewrite type.identity_subst_length.
+          constructor.
+          -- cbn. lia.
+          -- rewrite Forall_map.
+             eapply Forall_impl; [| apply Fd].
+             auto using type.wf_shift'.
+      + auto using type.wf_subst.
+    - cbn [type.subst].
+      apply has_type.pack with (ty_rep := type.subst delta ty_rep).
+      + auto using type.wf_subst.
+      + forward IHt; [assumption|].
+        specialize (IHt _ _ eq_refl Fd).
+        assert (type.wf (S (length delta)) ty_interface) as WFint.
+        {
+           apply t_type_wf in H0; [|assumption].
+           apply type.wf_subst_inv in H0.
+           cbn [length] in H0.
+           rewrite type.identity_subst_length in H0.
+           rewrite Nat.max_r in H0 by lia.
+           assumption.
+        }
+        eqapply IHt.
+        rewrite !type.subst_subst.
+        -- f_equal.
+           cbn [map].
+           f_equal.
+           rewrite type.map_subst_identity_subst.
+           symmetry.
+           rewrite map_map.
+           rewrite map_ext_Forall with (g := fun x => x).
+           now rewrite map_id.
+           eapply Forall_impl; [| apply Fd].
+           intros t WF.
+           rewrite type.subst_shift_cons.
+           auto using type.subst_identity.
+           now rewrite type.identity_subst_length.
+        -- cbn.
+           rewrite map_length.
+           assumption.
+        -- cbn [length].
+           rewrite type.identity_subst_length.
+           constructor; [cbn; lia|].
+           auto using type.wf_map_shift'.
+        -- cbn [length].
+           rewrite type.identity_subst_length.
+           assumption.
+        -- constructor; [assumption|].
+           apply type.wf_identity_subst.
+    - forward IHt2.
+      {
+        constructor.
+        - apply t_type_wf in H; auto.
+        - apply type.wf_map_shift'; auto.
+      }
+      specialize (IHt2 (S n') (type.var 0 :: map (type.shift 0 1) delta)).
+      forward IHt2.
+      {
+        cbn.
+        now rewrite map_length.
+      }
+      forward IHt2.
+      {
+        constructor.
+        - cbn. lia.
+        - now apply type.wf_map_shift'.
+      }
+      apply unpack
+        with (ty1 := type.subst (type.var 0 :: map (type.shift 0 1) delta)
+                                ty1)
+             (ty2 := type.subst (type.var 0 :: map (type.shift 0 1) delta)
+                                ty2).
+      + cbn [type.subst] in IHt1.
+        now apply IHt1; auto.
+      + eqapply IHt2.
+        cbn.
+        f_equal.
+        rewrite !map_map.
+        apply map_ext_Forall.
+        eapply Forall_impl; [| apply FG].
+        intros t WF.
+        rewrite type.subst_shift_cons by now rewrite map_length.
+        now rewrite type.shift_subst by assumption.
+      + subst ty2.
+        assert (type.wf (length delta) ty2').
+        {
+          apply t_type_wf in H0; auto.
+          apply type.wf_shift_inv' in H0.
+          assumption.
+        }
+        rewrite type.subst_shift_cons by now rewrite map_length.
+        now rewrite type.shift_subst by assumption.
+  Qed.
 End has_type.
 
 Module value.
@@ -514,6 +707,7 @@ Module value.
   | tt : t expr.tt
   | ff : t expr.ff
   .
+  Hint Constructors t : core.
 End value.
 
 Module step.
@@ -535,7 +729,7 @@ Module step.
       t e e' ->
       t (expr.tyapp e) (expr.tyapp e')
   | packbeta : forall v e2,
-      value.t v -> 
+      value.t v ->
       t (expr.unpack (expr.pack v) e2) (expr.subst [v] e2)
   | pack : forall e e',
       t e e' ->
@@ -704,7 +898,7 @@ Module step.
   Lemma star_det :
     forall e v1 v2,
       value.t v1 ->
-      value.t v2 -> 
+      value.t v2 ->
       star e v1 ->
       star e v2 ->
       v1 = v2.
@@ -723,3 +917,150 @@ Module step.
       auto.
   Qed.
 End step.
+
+Module type_safety.
+  Definition safe (e : expr.t) :=
+    value.t e \/
+    exists e',
+      step.t e e'.
+
+  Lemma canonical_forms_arrow :
+    forall n G e ty1 ty2,
+      has_type.t n G e (type.arrow ty1 ty2) ->
+      value.t e ->
+      exists e',
+        e = expr.abs e'.
+  Proof.
+    intros n G e ty1 ty2 HT V.
+    invc HT; invc V; eauto.
+  Qed.
+
+  Lemma canonical_forms_all :
+    forall n G e ty,
+      has_type.t n G e (type.all ty) ->
+      value.t e ->
+      exists e',
+        e = expr.tyabs e'.
+  Proof.
+    intros n G e ty HT V.
+    invc HT; invc V; eauto.
+  Qed.
+
+  Lemma canonical_forms_exist :
+    forall n G e ty,
+      has_type.t n G e (type.exist ty) ->
+      value.t e ->
+      exists e',
+        e = expr.pack e'.
+  Proof.
+    intros n G e ty HT V.
+    invc HT; invc V; eauto.
+  Qed.
+
+  Lemma canonical_forms_bool :
+    forall n G e,
+      has_type.t n G e type.bool ->
+      value.t e ->
+      e = expr.tt \/ e = expr.ff.
+  Proof.
+    intros n G e HT V.
+    invc HT; invc V; auto.
+  Qed.
+
+  Lemma progress :
+    forall e ty,
+      has_type.t 0 [] e ty ->
+      safe e.
+  Proof.
+    intros e ty HT.
+    remember [] as G eqn:EG in HT.
+    remember 0 as n eqn:EN in HT.
+    revert EN EG.
+    induction HT; intros EN EG; subst n G;
+      try solve [repeat econstructor];
+      repeat match goal with
+             | [ H : _ |- _ ] => specialize (H eq_refl)
+             end.
+    - destruct x; discriminate.
+    - invc IHHT1; [invc IHHT2|];
+        try solve [firstorder; unfold safe; eauto].
+      apply canonical_forms_arrow in HT1; [|assumption].
+      destruct HT1 as [b1 ?].
+      subst e1.
+      unfold safe.
+      eauto.
+    - invc IHHT; try solve [firstorder; unfold safe; eauto].
+      apply canonical_forms_all in HT; [|assumption].
+      destruct HT as [b ?].
+      subst e.
+      unfold safe.
+      eauto.
+    - destruct IHHT as [|[e' Step]];
+        unfold safe; eauto.
+    - destruct IHHT1 as [V|]; [|firstorder; unfold safe; now eauto].
+      apply canonical_forms_exist in HT1; [|assumption].
+      destruct HT1 as [e' ?]. subst e1.
+      invc V.
+      unfold safe.
+      eauto.
+    - destruct IHHT1; [|firstorder; unfold safe; now eauto].
+      apply canonical_forms_bool in HT1; [|assumption].
+      destruct HT1; subst e1; unfold safe; eauto.
+  Qed.
+
+  Lemma preservation :
+    forall e e' ty,
+      has_type.t 0 [] e ty ->
+      step.t e e' ->
+      has_type.t 0 [] e' ty.
+  Proof.
+    intros e e' ty HT S.
+    remember [] as G eqn:EG in HT.
+    remember 0 as n eqn:EN in HT.
+    revert EN EG e' S.
+    induction HT; intros EN EG e' S; subst n G; invc S; auto;
+      try solve [econstructor; eauto].
+    - invc HT1.
+      eauto using has_type.subst.
+    - invc HT.
+      apply has_type.tysubst with (G := []) (n := 1);
+        auto using type.wf_identity_subst.
+    - assert (type.wf 1 ty1).
+      {
+        eapply has_type.t_type_wf in HT1.
+        assumption.
+        constructor.
+      }
+      assert (type.wf 0 ty2').
+      {
+        eapply has_type.t_type_wf in HT2.
+        now auto using type.wf_shift_inv'.
+        constructor.
+        assumption.
+        constructor.
+      }
+      invc HT1.
+      cbn in *.
+      eapply has_type.subst.
+      eapply has_type.tysubst with (delta := [ty_rep]) in HT2.
+      eqapply HT2.
+      all: cbn; auto using type.wf_subst.
+      now rewrite type.subst_shift_singleton.
+  Qed.
+
+  Theorem type_safety :
+    forall e e' ty,
+      has_type.t 0 [] e ty ->
+      step.star e e' ->
+      safe e'.
+  Proof.
+    intros e e' ty HT S.
+    generalize dependent ty.
+    apply clos_rtn1_rt in S.
+    apply clos_rt_rt1n in S.
+    induction S; intros.
+    - eauto using progress.
+    - eauto using preservation.
+  Qed.
+End type_safety.
+Print Assumptions type_safety.type_safety.

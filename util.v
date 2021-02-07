@@ -37,6 +37,16 @@ Proof.
   - induction 1; simpl; constructor; auto.
 Qed.
 
+Lemma Forall_map_bwd :
+  forall A B (f : A -> B) P l,
+    Forall (fun x => P (f x)) l ->
+    Forall P (map f l).
+Proof.
+  intros A B f P l F.
+  apply Forall_map.
+  auto.
+Qed.
+
 Lemma Forall2_nth_error2 :
   forall {A B} {P : A -> B -> Prop} {l1 l2 x y},
     List.Forall2 P l1 l2 ->
@@ -89,6 +99,15 @@ Lemma Forall2_map_l :
   forall A B (P : A -> B -> Prop) A' (f : A' -> A) l1 l2,
     List.Forall2 (fun x => P (f x)) l1 l2 ->
     List.Forall2 P (List.map f l1) l2
+.
+Proof.
+  induction 1; simpl; constructor; auto.
+Qed.
+
+Lemma Forall2_map_r :
+  forall A B (P : A -> B -> Prop) B' (f : B' -> B) l1 l2,
+    List.Forall2 (fun x y => P x (f y)) l1 l2 ->
+    List.Forall2 P l1 (List.map f l2)
 .
 Proof.
   induction 1; simpl; constructor; auto.
@@ -186,6 +205,16 @@ Proof.
   - revert l2.
     induction l1; destruct l2; simpl; intros F; invc F; constructor; auto.
   - induction 1; simpl; constructor; auto.
+Qed.
+
+Lemma Forall2_map_bwd :
+  forall A B A' B' (P : A -> B -> Prop) (f : A' -> A) (g : B' -> B) l1 l2,
+    Forall2 (fun x y => P (f x) (g y)) l1 l2 ->
+    Forall2 P (map f l1) (map g l2).
+Proof.
+  intros.
+  apply Forall2_map.
+  auto.
 Qed.
 
 Lemma Forall2_impl :
@@ -911,3 +940,27 @@ Proof.
   cbn.
   destruct l as [|[|]]; reflexivity.
 Qed.
+
+Ltac forward H :=
+  match type of H with
+  | ?P -> ?Q =>
+    let HP := fresh "H" in
+    assert P as HP; [|specialize (H HP)]
+  end.
+
+Ltac eqapply H :=
+  match type of H with
+  | ?f ?X1 ?X2 ?X3 ?X4 =>
+    match goal with
+    | [ |- ?g ?Y1 ?Y2 ?Y3 ?Y4 ] =>
+      replace Y1 with X1; [
+        replace Y2 with X2; [
+          replace Y3 with X3; [
+            replace Y4 with X4; [
+              apply H
+            | try reflexivity ]
+          | try reflexivity ]
+        | try reflexivity ]
+      | try reflexivity ]
+    end
+  end.

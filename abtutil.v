@@ -50,7 +50,7 @@ Module abt_util (SB : SYNTAX_BASIS).
 
   Lemma wf_of_abt :
     forall a n,
-      A.ws a -> 
+      A.ws a ->
       wf n (of_abt a) <-> A.wf n a.
   Proof.
     intros.
@@ -219,8 +219,23 @@ Module abt_util (SB : SYNTAX_BASIS).
     now rewrite A.subst_identity.
   Qed.
 
+  Lemma map_subst_identity_subst :
+    forall rho,
+      map (subst rho) (identity_subst (length rho))
+      = rho.
+  Proof.
+    intros rho.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_subst_to_abt_comm.
+    rewrite SB.identity_subst_to_abt_comm.
+    replace (length rho) with (length (map to_abt rho))
+      by auto using map_length.
+    apply A.map_subst_identity_subst.
+  Qed.
+
   Lemma wf_subst_inv :
-    forall e n rho, 
+    forall e n rho,
       wf n (subst rho e) ->
       wf (max n (length rho)) e.
   Proof.
