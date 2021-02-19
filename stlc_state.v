@@ -96,6 +96,20 @@ Module expr_basis.
     | _ => var 0 (* bogus *)
     end.
 
+  Fixpoint t_map ov c (e : t) : t :=
+    match e with
+    | var x => ov c x
+    | abs e' => abs (t_map ov (S c) e')
+    | app e1 e2 => app (t_map ov c e1) (t_map ov c e2)
+    | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (t_map ov c e1) (t_map ov c e2) (t_map ov c e3)
+    | addr n => addr n
+    | ref e' => ref (t_map ov c e')
+    | deref e' => deref (t_map ov c e')
+    | assign e1 e2 => assign (t_map ov c e1) (t_map ov c e2)
+    end.
+
   Fixpoint shift c d (e : t) : t :=
     match e with
     | var x => var (if x <? c then x else x + d)
@@ -156,6 +170,10 @@ Module expr_basis.
   Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
   Proof. A.basis_util.prove_to_of_abt to_abt of_abt. Qed.
 
+  Lemma t_map_to_abt_comm : forall ov e c,
+      to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+  Proof. A.basis_util.prove_t_map_to_abt_comm. Qed.
+
   Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
   Proof. A.basis_util.prove_shift_to_abt_comm. Qed.
 
@@ -211,7 +229,7 @@ Module has_type.
       t S G (expr.app e1 e2) ty2
   | If : forall S G e1 e2 e3 ty,
       t S G e1 type.bool ->
-      t S G e2 ty -> 
+      t S G e2 ty ->
       t S G e3 ty ->
       t S G (expr.If e1 e2 e3) ty
   | addr : forall S G a ty,

@@ -132,6 +132,37 @@ Module Type ABT.
         | b :: bs => wf_binder n b /\ go_list n bs
         end.
 
+  Fixpoint t_map (onvar : (*c*) nat -> (*x*) nat -> t) (c : nat) (e : t) : t :=
+    let fix go_list (onvar : nat -> nat -> t) (c : nat) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => t_map_binder onvar c b :: go_list onvar c bs
+        end
+    in
+        match e with
+        | var x => onvar c x
+        | op o bs => op o (go_list onvar c bs)
+        end
+  with t_map_binder (onvar : nat -> nat -> t) (c : nat) (b : binder) : binder :=
+         match b with
+         | bind n e => bind n (t_map onvar (n + c) e)
+         end
+  .
+  Definition t_map_binders :=
+    fix go_list (onvar : nat -> nat -> t) (c : nat) (bs : list binder) : list binder :=
+      match bs with
+      | [] => []
+      | b :: bs => t_map_binder onvar c b :: go_list onvar c bs
+      end.
+
+  Definition shift_onvar d := (fun c x => if x <? c then var x else var (x + d)).
+  Definition shift_via_t_map (c d : nat) (e : t) : t :=
+    t_map (shift_onvar d) c e.
+  Definition shift_binder_via_t_map (c d : nat) (b : binder) : binder :=
+    t_map_binder (shift_onvar d) c b.
+  Definition shift_binders_via_t_map (c d : nat) (bs : list binder) : list binder :=
+    t_map_binders (shift_onvar d) c bs.
+
   Fixpoint shift (c d : nat) (e : t) : t :=
     let fix go_list (c d : nat) (bs : list binder) : list binder :=
         match bs with
@@ -154,6 +185,25 @@ Module Type ABT.
         | [] => []
         | b :: bs => shift_binder c d b :: go_list c d bs
         end.
+
+  Parameter shift_via_t_map_is_shift :
+    forall d e c,
+      shift_via_t_map c d e = shift c d e.
+
+  Parameter t_map_bump :
+    forall ov d e c,
+      t_map ov (c + d) e = t_map (fun c x => ov (c + d) x) c e.
+
+  Parameter t_map_ext :
+    forall ov ov',
+      (forall c x, ov c x = ov' c x) ->
+      forall e c,
+        t_map ov c e = t_map ov' c e.
+
+  Parameter t_map_t_map :
+    forall ov1 ov2 e c1 c2,
+      t_map ov2 c2 (t_map ov1 c1 e) =
+      t_map (fun c x => t_map ov2 (c + c2 - c1) (ov1 c x)) c1 e.
 
   Fixpoint identity_subst (n : nat) : list t :=
     match n with
@@ -207,10 +257,27 @@ Module Type ABT.
 
   Parameter identity_subst_length : forall n, length (identity_subst n) = n.
 
-  Parameter shift_merge : forall e c d1 d2, shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Parameter shift_merge :
+    forall e c1 c2 d1 d2,
+      c1 <= c2 ->
+      c2 <= c1 + d1  ->
+      shift c2 d2 (shift c1 d1 e) = shift c1 (d1 + d2) e.
+
+  Parameter shift_merge' : forall e c d1 d2, shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
   Parameter shift_nop_d : forall e c, shift c 0 e = e.
+  Parameter shift_shift :
+    forall e c1 d1 c2 d2,
+      c2 <= c1 ->
+      shift c2 d2 (shift c1 d1 e) =
+      shift (c1 + d2) d1 (shift c2 d2 e).
+
   Parameter shift_shift' : forall c d e,
       shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
+
+  Parameter shift_inj :
+    forall e1 e2 c d,
+      shift c d e1 = shift c d e2 ->
+      e1 = e2.
 
   Parameter subst_subst :
     forall e rho1 rho2,
@@ -276,6 +343,11 @@ Module Type ABT.
   Parameter wf_SIS : forall d n, Forall (wf (d + n)) (SIS d n).
 
   Parameter SIS_merge :
+    forall n c d1 d2,
+      c <= d1 ->
+      map (shift c d2) (SIS d1 n) = SIS (d1 + d2) n.
+
+  Parameter SIS_merge_0 :
     forall n d1 d2,
       map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
 
@@ -290,10 +362,10 @@ Module Type ABT.
   Module basis_util.
     Ltac prove_ws_to_abt :=
       intros e; induction e; simpl; intuition.
-    
+
     Ltac prove_of_to_abt :=
       intros e; induction e; simpl; f_equal; auto.
-    
+
     Ltac prove_to_of_abt to_abt of_abt :=
       intros a;
       induction a using rect'
@@ -308,10 +380,13 @@ Module Type ABT.
                | [ H : Forall _ (_ :: _) |- _ ] => inversion H; subst; clear H
                end; simpl in *; try lia;
           repeat f_equal; eauto.
-    
+
+    Ltac prove_t_map_to_abt_comm :=
+      intros ov e; induction e; simpl; intros c; auto; repeat f_equal; auto.
+
     Ltac prove_shift_to_abt_comm :=
       intros e; induction e; simpl; intros c d; auto; repeat f_equal; auto.
-    
+
     Ltac prove_map_shift_to_abt_comm stac :=
       intros; rewrite !map_map; now erewrite map_ext by (intros; apply stac).
 
@@ -399,7 +474,6 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     Defined.
   End rect'.
 
-
   Fixpoint wf (n : nat) (e : t) :=
     let fix go_list (n : nat) (bs : list binder) :=
         match bs with
@@ -421,6 +495,37 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
         | [] => True
         | b :: bs => wf_binder n b /\ go_list n bs
         end.
+
+  Fixpoint t_map (onvar : (*c*) nat -> (*x*) nat -> t) (c : nat) (e : t) : t :=
+    let fix go_list (onvar : nat -> nat -> t) (c : nat) (bs : list binder) : list binder :=
+        match bs with
+        | [] => []
+        | b :: bs => t_map_binder onvar c b :: go_list onvar c bs
+        end
+    in
+        match e with
+        | var x => onvar c x
+        | op o bs => op o (go_list onvar c bs)
+        end
+  with t_map_binder (onvar : nat -> nat -> t) (c : nat) (b : binder) : binder :=
+         match b with
+         | bind n e => bind n (t_map onvar (n + c) e)
+         end
+  .
+  Definition t_map_binders :=
+    fix go_list (onvar : nat -> nat -> t) (c : nat) (bs : list binder) : list binder :=
+      match bs with
+      | [] => []
+      | b :: bs => t_map_binder onvar c b :: go_list onvar c bs
+      end.
+
+  Definition shift_onvar d := (fun c x => if x <? c then var x else var (x + d)).
+  Definition shift_via_t_map (c d : nat) (e : t) : t :=
+    t_map (shift_onvar d) c e.
+  Definition shift_binder_via_t_map (c d : nat) (b : binder) : binder :=
+    t_map_binder (shift_onvar d) c b.
+  Definition shift_binders_via_t_map (c d : nat) (bs : list binder) : list binder :=
+    t_map_binders (shift_onvar d) c bs.
 
   Fixpoint shift (c d : nat) (e : t) : t :=
     let fix go_list (c d : nat) (bs : list binder) : list binder :=
@@ -444,6 +549,81 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
         | [] => []
         | b :: bs => shift_binder c d b :: go_list c d bs
         end.
+
+
+  Lemma shift_via_t_map_is_shift :
+    forall d e c,
+      shift_via_t_map c d e = shift c d e.
+  Proof.
+    intros d.
+    induction e using rect
+      with (Pb := fun b => forall c, shift_binder_via_t_map c d b = shift_binder c d b)
+           (Pbl := fun bs => forall c, shift_binders_via_t_map c d bs = shift_binders c d bs);
+      intros c.
+    - cbn -[Nat.ltb]. unfold shift_onvar.
+      destruct (_ <? _); reflexivity.
+    - cbn. now rewrite <- IHe.
+    - cbn. now rewrite <- IHe.
+    - reflexivity.
+    - cbn. now rewrite <- IHe, <- IHe0.
+  Qed.
+
+  Lemma t_map_bump :
+    forall ov d e c,
+      t_map ov (c + d) e = t_map (fun c x => ov (c + d) x) c e.
+  Proof.
+    intros ov d.
+    induction e using rect
+      with (Pb := fun b => forall c : nat,
+                      t_map_binder ov (c + d) b =
+                      t_map_binder (fun c x : nat => ov (c + d) x) c b)
+           (Pbl := fun bs => forall c : nat,
+                       t_map_binders ov (c + d) bs =
+                       t_map_binders (fun c x => ov (c + d) x) c bs);
+      intros; cbn.
+    - reflexivity.
+    - fold t_map_binders. f_equal. auto.
+    - f_equal. rewrite <- IHe. f_equal. lia.
+    - reflexivity.
+    - f_equal; auto.
+  Qed.
+
+  Lemma t_map_ext :
+    forall ov ov',
+      (forall c x, ov c x = ov' c x) ->
+      forall e c,
+        t_map ov c e = t_map ov' c e.
+  Proof.
+    intros ov ov' Ext.
+    induction e using rect
+      with (Pb := fun b => forall c : nat, t_map_binder ov c b = t_map_binder ov' c b)
+           (Pbl := fun bs => forall c : nat, t_map_binders ov c bs = t_map_binders ov' c bs);
+      intros c; cbn; auto.
+    - fold t_map_binders. f_equal. auto.
+    - f_equal. auto.
+    - f_equal; auto.
+  Qed.
+
+  Lemma t_map_t_map :
+    forall ov1 ov2 e c1 c2,
+      t_map ov2 c2 (t_map ov1 c1 e) =
+      t_map (fun c x => t_map ov2 (c + c2 - c1) (ov1 c x)) c1 e.
+  Proof.
+    intros ov1 ov2.
+    induction e using rect
+      with (Pb := fun b => forall c1 c2 : nat,
+                      t_map_binder ov2 c2 (t_map_binder ov1 c1 b) =
+                      t_map_binder (fun c x => t_map ov2 (c + c2 - c1) (ov1 c x)) c1 b)
+           (Pbl := fun bs => forall c1 c2 : nat,
+                       t_map_binders ov2 c2 (t_map_binders ov1 c1 bs) =
+                       t_map_binders (fun c x => t_map ov2 (c + c2 - c1) (ov1 c x)) c1 bs);
+      intros c1 c2; cbn; auto.
+    - f_equal. lia.
+    - fold t_map_binders. f_equal. auto.
+    - f_equal. rewrite IHe. apply t_map_ext. clear.
+      intros c x. f_equal. lia.
+    - f_equal; auto.
+  Qed.
 
   Fixpoint identity_subst (n : nat) : list t :=
     match n with
@@ -498,6 +678,20 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
         | b :: bs => subst_binder rho b :: go_list rho bs
         end.
 
+(*
+  Lemma shift_shift :
+    forall e c1 d1 c2 d2,
+      c2 <= c1 ->
+      shift c2 d2 (shift c1 d1 e) =
+      shift (c1 + d2) d1 (shift c2 d2 e).
+  Proof.
+    intros e c1 d1 c2 d2.
+    rewrite <- !shift_via_t_map_is_shift.
+    unfold shift_via_t_map.
+    rewrite !t_map_t_map.
+*)
+
+
   Lemma shift_shift :
     forall e c1 d1 c2 d2,
       c2 <= c1 ->
@@ -521,6 +715,25 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       rewrite IHe by lia.
       f_equal.
       lia.
+  Qed.
+
+  Lemma shift_inj :
+    forall e1 e2 c d,
+      shift c d e1 = shift c d e2 ->
+      e1 = e2.
+  Proof.
+    induction e1 using rect
+    with (Pb := fun b1 =>
+             forall b2 c d,
+               shift_binder c d b1 = shift_binder c d b2 ->
+               b1 = b2)
+         (Pbl := fun bs1 =>
+             forall bs2 c d,
+               shift_binders c d bs1 = shift_binders c d bs2 ->
+               bs1 = bs2);
+      intros [] c d EQ; try invc EQ; f_equal; eauto.
+    - destruct (Nat.ltb_spec x c) in *;
+      destruct (Nat.ltb_spec x0 c) in *; lia.
   Qed.
 
   Lemma shift_nop :
@@ -707,32 +920,70 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
   Qed.
 
   Lemma shift_merge :
-    forall e c d1 d2,
-      shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+    forall e c1 c2 d1 d2,
+      c1 <= c2 ->
+      c2 <= c1 + d1  ->
+      shift c2 d2 (shift c1 d1 e) = shift c1 (d1 + d2) e.
   Proof.
     induction e using rect
     with (Pb := fun b =>
-             forall c d1 d2,
-               shift_binder c d2 (shift_binder c d1 b) = shift_binder c (d2 + d1) b)
+             forall c1 c2 d1 d2,
+               c1 <= c2 ->
+               c2 <= c1 + d1  ->
+               shift_binder c2 d2 (shift_binder c1 d1 b) = shift_binder c1 (d1 + d2) b)
          (Pbl := fun bs =>
-             forall c d1 d2,
-               shift_binders c d2 (shift_binders c d1 bs) = shift_binders c (d2 + d1) bs);
-      simpl; intros c d1 d2; fold subst_binders shift_binders wf_binders in *;
-        f_equal; intuition; autorewrite with list in *.
-    repeat do_ltb; lia.
+             forall c1 c2 d1 d2,
+               c1 <= c2 ->
+               c2 <= c1 + d1  ->
+               shift_binders c2 d2 (shift_binders c1 d1 bs) = shift_binders c1 (d1 + d2) bs);
+      intros c1 c2 d1 d2 LE1 LE2.
+    - cbn [shift].
+      destruct (Nat.ltb_spec x c1).
+      + destruct (Nat.ltb_spec x c2).
+        * reflexivity.
+        * lia.
+      + destruct (Nat.ltb_spec (x + d1) c2).
+        * lia.
+        * f_equal. lia.
+    - cbn [shift]. fold shift_binders.
+      now rewrite IHe by assumption.
+    - cbn [shift_binder].
+      f_equal.
+      now rewrite IHe by lia.
+    - reflexivity.
+    - cbn [shift_binders].
+      f_equal; auto.
+  Qed.
+
+  Lemma shift_merge' :
+    forall e c d1 d2,
+      shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Proof.
+    intros.
+    rewrite shift_merge by lia.
+    f_equal.
+    lia.
   Qed.
 
   Lemma SIS_merge :
-    forall n d1 d2,
-      map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
+    forall n c d1 d2,
+      c <= d1 ->
+      map (shift c d2) (SIS d1 n) = SIS (d1 + d2) n.
   Proof.
     unfold SIS.
     intros.
     rewrite !map_map.
     apply map_ext.
     intros e.
-    rewrite shift_merge.
-    f_equal.
+    now rewrite shift_merge by lia.
+  Qed.
+
+  Lemma SIS_merge_0 :
+    forall n d1 d2,
+      map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
+  Proof.
+    intros n d1 d2.
+    apply SIS_merge.
     lia.
   Qed.
 
@@ -743,7 +994,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     intros.
     simpl.
     fold (SIS 1 n).
-    now rewrite SIS_merge.
+    now rewrite SIS_merge_0.
   Qed.
 
   Lemma SIS_unroll_r :
@@ -769,7 +1020,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       + rewrite nth_error_app2 by lia.
         now rewrite minus_diag.
       + fold (SIS 1 n).
-        rewrite SIS_merge.
+        rewrite SIS_merge_0.
         specialize (IHn (rho1 ++ [var (length rho1)]) rho2).
         autorewrite with list in *.
         simpl in *.
@@ -936,7 +1187,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
   Qed.
 
   Lemma wf_subst_inv :
-    forall e n rho, 
+    forall e n rho,
       wf n (subst rho e) ->
       wf (max n (length rho)) e.
   Proof.
@@ -1008,7 +1259,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     unfold SIS.
     induction n; intros s x y NE; destruct x; simpl in *; try congruence.
     - rewrite Nat.add_0_r. congruence.
-    - fold (SIS 1 n) in *. rewrite SIS_merge in *.
+    - fold (SIS 1 n) in *. rewrite SIS_merge_0 in *.
       unfold SIS in *.
       apply IHn in NE.
       now rewrite Nat.add_succ_r, Nat.add_1_l, Nat.add_succ_l in *.
@@ -1043,7 +1294,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     revert s.
     induction n; simpl; intros s.
     - now rewrite app_nil_r.
-    - fold (SIS 1 n). rewrite SIS_merge.
+    - fold (SIS 1 n). rewrite SIS_merge_0.
       specialize (IHn (S s)). unfold SIS.
       rewrite identity_subst_unroll_r in *.
       rewrite app_ass in IHn.
@@ -1191,11 +1442,11 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       erewrite map_ext.
       apply (IHn (S d)).
       intros e.
-      rewrite shift_merge.
+      rewrite shift_merge'.
       f_equal.
       lia.
   Qed.
-  
+
   Lemma ws_identity_subst :
     forall n,
       Forall ws (identity_subst n).
@@ -1207,7 +1458,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
 
   Lemma ws_descend :
     forall s rho,
-      Forall ws rho -> 
+      Forall ws rho ->
       Forall ws (descend s rho).
   Proof.
     unfold descend.
@@ -1219,10 +1470,10 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
       eapply Forall_impl; try eassumption.
       auto using ws_shift.
   Qed.
-  
+
   Lemma ws_subst :
     forall e rho,
-      ws e -> 
+      ws e ->
       Forall ws rho ->
       ws (subst rho e).
   Proof.
@@ -1254,7 +1505,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
     - f_equal.
       + rewrite nth_error_app2 by lia.
         now rewrite Nat.sub_diag.
-      + fold (SIS 1 (length rho2)). rewrite SIS_merge. unfold SIS.
+      + fold (SIS 1 (length rho2)). rewrite SIS_merge_0. unfold SIS.
         specialize (IHrho2 (rho1 ++ [a])).
         autorewrite with list in *.
         simpl in *.
@@ -1294,7 +1545,7 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
         subst. f_equal.
         lia.
     - rewrite IHe with (n := n).
-      rewrite descend_app, descend_length, SIS_merge.
+      rewrite descend_app, descend_length, SIS_merge_0.
       now rewrite plus_comm.
   Qed.
 
@@ -1461,4 +1712,3 @@ Module abt (O_ : OPERATOR) : ABT with Module O := O_.
   Module basis_util.
   End basis_util.
 End abt.
-

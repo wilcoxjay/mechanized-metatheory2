@@ -38,6 +38,8 @@ detail below.
   System F. Also contains some applications to proving "free theorems"
   for universal types.
 - `f_binary.v`: A binary logical relation for System F.
+- `f_combined.v`: A version of System F (without existentials) that uses
+  a single "combined" syntactic category for expressions and types.
 
 ## References
 

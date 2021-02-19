@@ -113,6 +113,23 @@ Module expr.
       | _ => ast.var 0 (* bogus *)
       end.
 
+    Fixpoint t_map ov c (e : t) : t :=
+      match e with
+      | ast.var x => ov c x
+      | ast.abs e' => ast.abs (t_map ov (S c) e')
+      | ast.app e1 e2 => ast.app (t_map ov c e1) (t_map ov c e2)
+      | ast.both e1 e2 => ast.both (t_map ov c e1) (t_map ov c e2)
+      | ast.let_pair e1 e2 => ast.let_pair (t_map ov c e1) (t_map ov (S (S c)) e2)
+      | ast.oneof e1 e2 => ast.oneof (t_map ov c e1) (t_map ov c e2)
+      | ast.fst e' => ast.fst (t_map ov c e')
+      | ast.snd e' => ast.snd (t_map ov c e')
+      | ast.inl e' => ast.inl (t_map ov c e')
+      | ast.inr e' => ast.inr (t_map ov c e')
+      | ast.case e1 e2 e3 => ast.case (t_map ov c e1) (t_map ov (S c) e2) (t_map ov (S c) e3)
+      | ast.tt => ast.tt
+      | ast.let_tt e1 e2 => ast.let_tt (t_map ov c e1) (t_map ov c e2)
+      end.
+
     Fixpoint shift c d (e : t) : t :=
       match e with
       | ast.var x => ast.var (if x <? c then x else x + d)
@@ -186,6 +203,10 @@ Module expr.
 
     Lemma to_of_abt : forall a, abt.ws a -> to_abt (of_abt a) = a.
     Proof. abt.basis_util.prove_to_of_abt to_abt of_abt. Qed.
+
+    Lemma t_map_to_abt_comm : forall ov e c,
+        to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+    Proof. A.basis_util.prove_t_map_to_abt_comm. Qed.
 
     Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = abt.shift c d (to_abt e).
     Proof. abt.basis_util.prove_shift_to_abt_comm. Qed.
@@ -1353,7 +1374,7 @@ Module has_type.
       has_opt_type (None :: G) (expr.shift 0 (S n) e) ty.
   Proof.
     intros n G e ty H.
-    rewrite <- expr.shift_merge with (d2 := 1).
+    rewrite <- expr.shift_merge' with (d2 := 1).
     now apply shift_cons_opt_None.
   Qed.
 

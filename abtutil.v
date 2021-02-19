@@ -17,6 +17,10 @@ Module Type SYNTAX_BASIS.
   Parameter of_to_abt : forall e, of_abt (to_abt e) = e.
   Parameter to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
 
+  Parameter t_map : (nat -> nat -> t) -> nat -> t -> t.
+  Parameter t_map_to_abt_comm : forall ov e c,
+      to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+
   Parameter shift : nat -> nat -> t -> t.
   Parameter shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
 
@@ -159,12 +163,94 @@ Module abt_util (SB : SYNTAX_BASIS).
     congruence.
   Qed.
 
-  Lemma shift_merge : forall e c d1 d2 , shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
+  Definition shift_onvar d := (fun c x => if x <? c then var x else var (x + d)).
+  Definition shift_via_t_map (c d : nat) (e : t) : t :=
+    t_map (shift_onvar d) c e.
+
+  Lemma shift_via_t_map_is_shift :
+    forall d e c,
+      shift_via_t_map c d e = shift c d e.
+  Proof.
+    intros d e c.
+    apply to_abt_inj.
+    unfold shift_via_t_map.
+    rewrite t_map_to_abt_comm.
+    rewrite shift_to_abt_comm.
+    rewrite <- A.shift_via_t_map_is_shift.
+    unfold A.shift_via_t_map.
+    apply A.t_map_ext.
+    clear.
+    intros c x.
+    unfold shift_onvar, A.shift_onvar.
+    destruct (_ <? _); now rewrite var_to_abt.
+  Qed.
+
+  Lemma t_map_bump :
+    forall ov d e c,
+      t_map ov (c + d) e = t_map (fun c x => ov (c + d) x) c e.
+  Proof.
+    intros ov d e c.
+    apply to_abt_inj.
+    rewrite !t_map_to_abt_comm.
+    apply A.t_map_bump.
+  Qed.
+
+  Lemma t_map_0 :
+    forall ov e c,
+      t_map ov c e = t_map (fun c' x => ov (c' + c) x) 0 e.
+  Proof.
+    intros ov e c.
+    apply t_map_bump with (c := 0).
+  Qed.
+
+  Lemma t_map_ext :
+    forall ov ov',
+      (forall c x, ov c x = ov' c x) ->
+      forall e c,
+        t_map ov c e = t_map ov' c e.
+  Proof.
+    intros ov ov' H e c.
+    apply to_abt_inj.
+    rewrite !t_map_to_abt_comm.
+    apply A.t_map_ext.
+    clear -H.
+    intros c x.
+    now rewrite H.
+  Qed.
+
+  Lemma t_map_t_map :
+    forall ov1 ov2 e c1 c2,
+      t_map ov2 c2 (t_map ov1 c1 e) =
+      t_map (fun c x => t_map ov2 (c + c2 - c1) (ov1 c x)) c1 e.
+  Proof.
+    intros ov1 ov2 e c1 c2.
+    apply to_abt_inj.
+    rewrite !t_map_to_abt_comm.
+    rewrite A.t_map_t_map.
+    apply A.t_map_ext.
+    clear.
+    intros c x.
+    now rewrite t_map_to_abt_comm.
+  Qed.
+
+  Lemma shift_merge :
+    forall e c1 c2 d1 d2,
+      c1 <= c2 ->
+      c2 <= c1 + d1  ->
+      shift c2 d2 (shift c1 d1 e) = shift c1 (d1 + d2) e.
+  Proof.
+    intros e c1 c2 d1 d2 LE1 LE2.
+    apply to_abt_inj.
+    rewrite !shift_to_abt_comm.
+    now rewrite A.shift_merge.
+  Qed.
+
+  Lemma shift_merge' : forall e c d1 d2 , shift c d2 (shift c d1 e) = shift c (d2 + d1) e.
   Proof.
     intros e c d1 d2.
     apply to_abt_inj.
     rewrite !shift_to_abt_comm.
-    now rewrite A.shift_merge.
+    now rewrite A.shift_merge'.
   Qed.
 
   Lemma shift_nop_d :
@@ -387,6 +473,30 @@ Module abt_util (SB : SYNTAX_BASIS).
     now rewrite map_shift_to_abt_comm.
   Qed.
 
+  Lemma shift_shift :
+    forall e c1 d1 c2 d2,
+      c2 <= c1 ->
+      shift c2 d2 (shift c1 d1 e) =
+      shift (c1 + d2) d1 (shift c2 d2 e).
+  Proof.
+    intros e c1 d1 c2 d2 LE.
+    apply to_abt_inj.
+    rewrite !shift_to_abt_comm.
+    now apply A.shift_shift.
+  Qed.
+
+  Lemma shift_inj :
+    forall e1 e2 c d,
+      shift c d e1 = shift c d e2 ->
+      e1 = e2.
+  Proof.
+    intros e1 e2 c d S.
+    apply to_abt_inj.
+    apply f_equal with (f := to_abt) in S.
+    rewrite !shift_to_abt_comm in S.
+    eauto using A.shift_inj.
+  Qed.
+
   Lemma shift_shift' :
     forall c d e,
       shift 0 1 (shift c d e) = shift (S c) d (shift 0 1 e).
@@ -431,6 +541,22 @@ Module abt_util (SB : SYNTAX_BASIS).
     rewrite !map_shift_to_abt_comm.
     rewrite !identity_subst_to_abt_comm, SIS_to_abt_comm.
     now rewrite A.map_shift_identity_subst_split.
+  Qed.
+
+  Lemma map_shift_identity_subst' :
+    forall c d,
+      map (shift c d) (identity_subst c) =
+      identity_subst c.
+  Proof.
+    intros c d.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_shift_to_abt_comm.
+    rewrite !identity_subst_to_abt_comm.
+    rewrite A.map_shift_identity_subst_split by lia.
+    rewrite Nat.sub_diag.
+    cbn.
+    now rewrite app_nil_r.
   Qed.
 
   Lemma subst_shift :
@@ -508,6 +634,18 @@ Module abt_util (SB : SYNTAX_BASIS).
   Qed.
 
   Lemma SIS_merge :
+    forall n c d1 d2,
+      c <= d1 ->
+      map (shift c d2) (SIS d1 n) = SIS (d1 + d2) n.
+  Proof.
+    intros n c d1 d2 LE.
+    apply map_inj with (f := to_abt).
+    apply to_abt_inj.
+    rewrite map_shift_to_abt_comm, !SIS_to_abt_comm.
+    now rewrite A.SIS_merge.
+  Qed.
+
+  Lemma SIS_merge_0 :
     forall n d1 d2,
       map (shift 0 d2) (SIS d1 n) = SIS (d1 + d2) n.
   Proof.
@@ -515,7 +653,7 @@ Module abt_util (SB : SYNTAX_BASIS).
     apply map_inj with (f := to_abt).
     apply to_abt_inj.
     rewrite map_shift_to_abt_comm, !SIS_to_abt_comm.
-    now rewrite A.SIS_merge.
+    now rewrite A.SIS_merge_0.
   Qed.
 
   Lemma SIS_merge' :
@@ -523,7 +661,7 @@ Module abt_util (SB : SYNTAX_BASIS).
       map (shift 0 1) (SIS d n) = SIS (S d) n.
   Proof.
     intros n d.
-    rewrite SIS_merge.
+    rewrite SIS_merge_0.
     now rewrite Nat.add_1_r.
   Qed.
 
@@ -620,6 +758,23 @@ Module abt_util (SB : SYNTAX_BASIS).
   Proof.
     intros n rho e WF.
     now rewrite subst_descend_shift, shift_subst by assumption.
+  Qed.
+
+  Lemma subst_cons_shift_shift_subst_1 :
+    forall rho e,
+      wf (length rho) e ->
+      subst (var 0 :: map (shift 0 1) rho) (shift 0 1 e) =
+      shift 0 1 (subst rho e).
+  Proof.
+    intros.
+    rewrite <- subst_descend_shift_shift_subst by assumption.
+    f_equal.
+    unfold descend.
+    replace (identity_subst 1) with [var 0].
+    reflexivity.
+    apply map_inj with (f := to_abt); [now apply to_abt_inj|].
+    cbn.
+    now rewrite identity_subst_to_abt_comm, var_to_abt.
   Qed.
 
   Lemma subst_cons_identity_subst_shift_1 :

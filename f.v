@@ -91,6 +91,15 @@ Module type_basis.
     | _ => var 0 (* bogus *)
     end.
 
+  Fixpoint t_map ov c (ty : t) : t :=
+    match ty with
+    | var alpha => ov c alpha
+    | arrow ty1 ty2 => arrow (t_map ov c ty1) (t_map ov c ty2)
+    | all ty' => all (t_map ov (S c) ty')
+    | exist ty' => exist (t_map ov (S c) ty')
+    | bool => bool
+    end.
+
   Fixpoint shift c d (ty : t) : t :=
     match ty with
     | var alpha => var (if alpha <? c then alpha else alpha + d)
@@ -135,6 +144,10 @@ Module type_basis.
 
   Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
   Proof. A.basis_util.prove_to_of_abt to_abt of_abt. Qed.
+
+  Lemma t_map_to_abt_comm : forall ov e c,
+      to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+  Proof. A.basis_util.prove_t_map_to_abt_comm. Qed.
 
   Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
   Proof. A.basis_util.prove_shift_to_abt_comm. Qed.
@@ -225,6 +238,20 @@ Module expr_basis.
     | _ => var 0 (* bogus *)
     end.
 
+  Fixpoint t_map ov c (e : t) : t :=
+    match e with
+    | var x => ov c x
+    | abs e' => abs (t_map ov (S c) e')
+    | app e1 e2 => app (t_map ov c e1) (t_map ov c e2)
+    | tyabs e' => tyabs (t_map ov c e')
+    | tyapp e' => tyapp (t_map ov c e')
+    | pack e' => pack (t_map ov c e')
+    | unpack e1 e2 => unpack (t_map ov c e1) (t_map ov (S c) e2)
+    | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (t_map ov c e1) (t_map ov c e2) (t_map ov c e3)
+    end.
+
   Fixpoint shift c d (e : t) : t :=
     match e with
     | var x => var (if x <? c then x else x + d)
@@ -284,6 +311,10 @@ Module expr_basis.
 
   Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
   Proof. A.basis_util.prove_to_of_abt to_abt of_abt. Qed.
+
+  Lemma t_map_to_abt_comm : forall ov e c,
+      to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+  Proof. A.basis_util.prove_t_map_to_abt_comm. Qed.
 
   Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
   Proof. A.basis_util.prove_shift_to_abt_comm. Qed.
@@ -365,7 +396,7 @@ Module has_type.
       t n G e3 ty ->
       t n G (expr.If e1 e2 e3) ty
   .
-  Hint Constructors t.
+  Hint Constructors t : core.
 
   Lemma t_type_wf :
     forall n G e ty,
@@ -580,7 +611,7 @@ Module has_type.
       eqapply IHt.
       rewrite !map_map.
       eauto using map_ext_Forall, Forall_impl, type.subst_descend_shift_shift_subst.
-    - forward IHt; [assumption|].
+    - forward IHt.
       specialize (IHt n' delta eq_refl Fd).
       cbn [type.subst] in *.
       rewrite <- type.descend_1 in *.
@@ -596,7 +627,7 @@ Module has_type.
     - cbn [type.subst].
       rewrite <- type.descend_1.
       apply has_type.pack with (ty_rep := type.subst delta ty_rep); [now auto|].
-      forward IHt; [assumption|].
+      forward IHt.
       specialize (IHt _ _ eq_refl Fd).
       assert (type.wf (S (length delta)) ty_interface) as WFint
           by eauto using type.wf_subst_id_inv, t_type_wf.

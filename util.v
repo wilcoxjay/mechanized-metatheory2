@@ -104,6 +104,18 @@ Proof.
   induction 1; simpl; constructor; auto.
 Qed.
 
+Lemma Forall2_map_l_iff :
+  forall A B (P : A -> B -> Prop) A' (f : A' -> A) l1 l2,
+    List.Forall2 P (List.map f l1) l2 <->
+    List.Forall2 (fun x => P (f x)) l1 l2
+.
+Proof.
+  intros.
+  split; auto using Forall2_map_l.
+  revert l1.
+  induction l2 as [|h2 t2]; intros [|h1 t1] F; invc F; auto.
+Qed.
+
 Lemma Forall2_map_r :
   forall A B (P : A -> B -> Prop) B' (f : B' -> B) l1 l2,
     List.Forall2 (fun x y => P x (f y)) l1 l2 ->
@@ -111,6 +123,18 @@ Lemma Forall2_map_r :
 .
 Proof.
   induction 1; simpl; constructor; auto.
+Qed.
+
+Lemma Forall2_map_r_iff :
+  forall A B (P : A -> B -> Prop) B' (f : B' -> B) l1 l2,
+    List.Forall2 P l1 (List.map f l2) <->
+    List.Forall2 (fun x y => P x (f y)) l1 l2
+.
+Proof.
+  intros.
+  split; auto using Forall2_map_r.
+  revert l2.
+  induction l1 as [|h1 t1]; intros [|h2 t2] F; invc F; auto.
 Qed.
 
 Lemma Forall2_from_forall :
@@ -225,6 +249,15 @@ Lemma Forall2_impl :
 Proof.
   intros A B P Q l1 l2 H F.
   induction F; constructor; auto.
+Qed.
+
+Lemma Forall_Forall2_and_r :
+  forall A B (P : A -> B -> Prop) (Q : B -> Prop) l1 l2,
+    Forall2 P l1 l2 ->
+    Forall Q l2 ->
+    Forall2 (fun a b => P a b /\ Q b) l1 l2.
+Proof.
+  induction 1; intros FQ; invc FQ; constructor; auto.
 Qed.
 
 Lemma app_comm_cons' :
@@ -412,21 +445,26 @@ Qed.
 
 Inductive and3 (P1 P2 P3 : Prop) : Prop :=
   And3 : P1 -> P2 -> P3 -> and3 P1 P2 P3.
+Hint Constructors and3 : core.
 
 Inductive and4 (P1 P2 P3 P4 : Prop) : Prop :=
   And4 : P1 -> P2 -> P3 -> P4 -> and4 P1 P2 P3 P4.
+Hint Constructors and4 : core.
 
 Inductive and5 (P1 P2 P3 P4 P5 : Prop) : Prop :=
   And5 : P1 -> P2 -> P3 -> P4 -> P5 -> and5 P1 P2 P3 P4 P5.
+Hint Constructors and5 : core.
 
 Inductive or3 (P1 P2 P3 : Prop) : Prop := Or31 : P1 -> or3 P1 P2 P3
                                   | Or32 : P2 -> or3 P1 P2 P3
                                   | Or33 : P3 -> or3 P1 P2 P3.
+Hint Constructors or3 : core.
 
 Inductive or4 (P1 P2 P3 P4 : Prop) : Prop := Or41 : P1 -> or4 P1 P2 P3 P4
                                      | Or42 : P2 -> or4 P1 P2 P3 P4
                                      | Or43 : P3 -> or4 P1 P2 P3 P4
                                      | Or44 : P4 -> or4 P1 P2 P3 P4.
+Hint Constructors or4 : core.
 
 Notation "[ /\ P1 & P2 ]" := (and P1 P2) (only parsing) : type_scope.
 Notation "[ /\ P1 , P2 & P3 ]" := (and3 P1 P2 P3) : type_scope.
@@ -447,6 +485,18 @@ Proof.
   - now rewrite !nth_error_app1 by assumption.
   - rewrite !nth_error_app2 by lia.
     f_equal. lia.
+Qed.
+
+
+Lemma nth_error_shift' :
+  forall A (l1 l2 l3 : list A) n n1,
+    n1 = length l1 ->
+    nth_error (l1 ++ l2 ++ l3) (if n <? n1 then n else n + length l2) =
+    nth_error (l1 ++ l3) n.
+Proof.
+  intros.
+  subst.
+  apply nth_error_shift.
 Qed.
 
 
@@ -944,8 +994,9 @@ Qed.
 Ltac forward H :=
   match type of H with
   | ?P -> ?Q =>
+    specialize (H ltac:(now auto)) ||
     let HP := fresh "H" in
-    assert P as HP; [|specialize (H HP)]
+    assert P as HP; [auto|specialize (H HP)]
   end.
 
 Ltac eqapply H :=
@@ -961,6 +1012,33 @@ Ltac eqapply H :=
             | try reflexivity ]
           | try reflexivity ]
         | try reflexivity ]
+      | try reflexivity ]
+    end
+  | ?f ?X1 ?X2 ?X3 =>
+    match goal with
+    | [ |- ?g ?Y1 ?Y2 ?Y3 ] =>
+      replace Y1 with X1; [
+        replace Y2 with X2; [
+          replace Y3 with X3; [
+            apply H
+          | try reflexivity ]
+        | try reflexivity ]
+      | try reflexivity ]
+    end
+  | ?f ?X1 ?X2 =>
+    match goal with
+    | [ |- ?g ?Y1 ?Y2 ] =>
+      replace Y1 with X1; [
+        replace Y2 with X2; [
+          apply H
+        | try reflexivity ]
+      | try reflexivity ]
+    end
+  | ?f ?X1 =>
+    match goal with
+    | [ |- ?g ?Y1 ] =>
+      replace Y1 with X1; [
+        apply H
       | try reflexivity ]
     end
   end.

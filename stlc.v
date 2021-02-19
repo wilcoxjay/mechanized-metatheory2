@@ -74,6 +74,16 @@ Module expr_basis.
     | _ => var 0 (* bogus *)
     end.
 
+  Fixpoint t_map ov c (e : t) : t :=
+    match e with
+    | var x => ov c x
+    | abs e' => abs (t_map ov (S c) e')
+    | app e1 e2 => app (t_map ov c e1) (t_map ov c e2)
+    | tt => tt
+    | ff => ff
+    | If e1 e2 e3 => If (t_map ov c e1) (t_map ov c e2) (t_map ov c e3)
+    end.
+
   Fixpoint shift c d (e : t) : t :=
     match e with
     | var x => var (if x <? c then x else x + d)
@@ -121,6 +131,10 @@ Module expr_basis.
 
   Lemma to_of_abt : forall a, A.ws a -> to_abt (of_abt a) = a.
   Proof. A.basis_util.prove_to_of_abt to_abt of_abt. Qed.
+
+  Lemma t_map_to_abt_comm : forall ov e c,
+      to_abt (t_map ov c e) = A.t_map (fun c x => to_abt (ov c x)) c (to_abt e).
+  Proof. A.basis_util.prove_t_map_to_abt_comm. Qed.
 
   Lemma shift_to_abt_comm : forall e c d, to_abt (shift c d e) = A.shift c d (to_abt e).
   Proof. A.basis_util.prove_shift_to_abt_comm. Qed.
@@ -178,6 +192,7 @@ Module has_type.
       t G e3 ty ->
       t G (expr.If e1 e2 e3) ty
   .
+  Hint Constructors t : core.
 
   Lemma wf :
     forall G e ty,
@@ -188,7 +203,58 @@ Module has_type.
     pose proof nth_error_Some G x. intuition congruence.
   Qed.
 
+  Definition extends (G' G : list type.t) : Prop :=
+    exists G_pre,
+      G' = G_pre ++ G.
+
+  Lemma t_map :
+    forall R ov,
+      (forall G G' c' x ty, R G G' c' -> nth_error G x = Some ty -> t G' (ov c' x) ty) ->
+      (forall G G' c' ty,
+          R G G' c' ->
+          R (ty :: G) (ty :: G') (S c')) ->
+    forall G e ty,
+      t G e ty ->
+      forall G' c',
+        R G G' c' ->
+        t G' (expr.t_map ov c' e) ty.
+  Proof.
+    intros R ov NE Hext.
+    induction 1; intros G' c' HR; cbn; try solve[constructor; auto].
+    - eauto.
+    - econstructor; eauto.
+  Qed.
+
   Lemma shift :
+    forall G e ty,
+      t G e ty ->
+      forall G1 G2 G',
+        G1 ++ G2 = G ->
+        t (G1 ++ G' ++ G2) (expr.shift (List.length G1) (List.length G') e) ty.
+  Proof.
+    intros G e ty HT G1 G2 G' EG.
+    rewrite <- expr.shift_via_t_map_is_shift.
+    unfold expr.shift_via_t_map.
+    apply t_map with (R := fun G3 G'3 c'3 => exists G_pre,
+                               [/\ G3 = G_pre ++ G1 ++ G2
+                                , G'3 = G_pre ++ G1 ++ G' ++ G2
+                                & c'3 = length (G_pre ++ G1)])
+                     (G := G); auto.
+    - intros G0 G'0 c' x ty0 [G_pre [? ? ?]] NE.
+      subst.
+      unfold expr.shift_onvar.
+      rewrite app_assoc in NE.
+      rewrite <- nth_error_shift with (l2 := G') in NE.
+      destruct (Nat.ltb_spec x (length (G_pre ++ G1))); constructor;
+        rewrite <- app_assoc in NE; auto.
+    - intros G0 G'0 c' ty0 [G_pre [? ? ?]].
+      exists (ty0 :: G_pre). cbn; split; auto; try congruence.
+    - subst G.
+      exists [].
+      auto.
+  Qed.
+
+  Lemma shift_old :
     forall G e ty,
       t G e ty ->
       forall G1 G2 G',
@@ -531,7 +597,6 @@ Module type_safety.
       eauto using has_type.subst.
     - econstructor; eauto.
     - econstructor; eauto.
-    - econstructor; eauto.
   Qed.
 
   Theorem type_safety :
@@ -548,8 +613,8 @@ Module type_safety.
     - eauto using progress.
     - eauto using preservation.
   Qed.
-  Print Assumptions type_safety.
 End type_safety.
+Print Assumptions type_safety.type_safety.
 
 Module context.
   Inductive t :=

@@ -323,7 +323,7 @@ Proof.
     rewrite map_ext
        with (f := (fun x => type.shift 0 (length d1) (type.shift 0 1 x)))
             (g := (fun x => type.shift 0 (S (length d1)) x))
-         by (intros; rewrite type.shift_merge; f_equal; lia).
+         by (intros; rewrite type.shift_merge'; f_equal; lia).
     specialize (IHd2 (d1 ++ [a])).
     rewrite app_length in IHd2.
     cbn [length] in IHd2.
@@ -469,13 +469,11 @@ Proof.
       destruct H12 as [v5 [v6 [Star5 Star6 Val5 Val6 V56]]].
       exists v5, v6.
       rewrite IHty2 in V56; auto.
-      split; auto.
     + rewrite <- IHty1 in H12; auto.
       specialize (H12 V34).
       destruct H12 as [v5 [v6 [Star5 Star6 Val5 Val6 V56]]].
       exists v5, v6.
       rewrite <- IHty2 in V56; auto.
-      split; auto.
   - unfold terminating.t.
     rewrite <- type.descend_1 in *.
     split; intros [WF1 WF2 [body1 [body2 [E1 E2 Ebody]]]];
@@ -1017,8 +1015,6 @@ Proof.
     exfalso.
     assert (expr.tt = expr.ff).
     eapply step.star_det; eauto.
-    constructor.
-    constructor.
     discriminate.
   - specialize (@there_are_two_bools_and_they_don't_change_their_mind e expr.tt expr.ff v1 v2 type.bool ty) as T.
     specialize (T HTe ltac:(constructor) ltac:(constructor) ltac:(assumption) ltac:(assumption)
@@ -1027,7 +1023,5 @@ Proof.
     exfalso.
     assert (expr.tt = expr.ff).
     eapply step.star_det; eauto.
-    constructor.
-    constructor.
     discriminate.
 Qed.

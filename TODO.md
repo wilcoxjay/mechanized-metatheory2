@@ -20,3 +20,9 @@
 
 - formalize various meta theorems from Frank's substructural logic
   course notes.
+
+- Carlo's way(s) to formalize telescopes:
+  - as cons lists, not snoc, with context extension defined recursively
+    - Q: how annoying is it to not have definitional equalities about extension?
+  - as an ABT itself. in the combined approach, it can be "internal".
+    - Q: how annoying is it to not have any list functions available?
