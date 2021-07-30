@@ -273,7 +273,7 @@ Proof.
   unfold empty.
   induction n; simpl; auto.
 Qed.
-Hint Resolve is_empty_empty : core.
+Global Hint Resolve is_empty_empty : core.
 
 Lemma is_empty_equal_empty :
   forall l,
@@ -315,14 +315,14 @@ Lemma is_singleton_cons :
     is_empty G ->
     is_singleton 0 ty (Some ty :: G).
 Proof. simpl. auto. Qed.
-Hint Resolve is_singleton_cons : core.
+Global Hint Resolve is_singleton_cons : core.
 
 Lemma is_singleton_skip :
   forall ty G n,
     is_singleton n ty G ->
     is_singleton (S n) ty (None :: G).
 Proof. auto. Qed.
-Hint Resolve is_singleton_skip : core.
+Global Hint Resolve is_singleton_skip : core.
 
 Lemma is_empty_Forall_is_empty :
   forall G Gs,
@@ -617,7 +617,7 @@ Module joinable.
     intros n.
     apply is_empty_l; auto.
   Qed.
-  Hint Resolve empty_internal : core.
+  Global Hint Resolve empty_internal : core.
 
   Lemma splice_empty :
     forall n n' G1 G2,
@@ -651,7 +651,7 @@ Module joinable.
   Proof.
     constructor.
   Qed.
-  Hint Resolve nil : core.
+  Global Hint Resolve nil : core.
 
   Notation empty := empty_internal.
 End joinable.
@@ -953,7 +953,7 @@ Module big_joinable.
   Proof.
     repeat constructor.
   Qed.
-  Hint Resolve zero_nil : core.
+  Global Hint Resolve zero_nil : core.
 
   Lemma zero_cons :
     forall l,
@@ -965,7 +965,7 @@ Module big_joinable.
     repeat constructor; intuition.
     apply joinable.Forall_length with (n := 0); auto.
   Qed.
-  Hint Resolve zero_cons : core.
+  Global Hint Resolve zero_cons : core.
 End big_joinable.
 Notation big_joinable := big_joinable.big_joinable.
 
@@ -1236,7 +1236,7 @@ Module has_type.
       t G2 e2 ty ->
       t G (expr.let_tt e1 e2) ty
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Definition has_opt_type G e oty :=
     match oty with
@@ -1252,7 +1252,7 @@ Module has_type.
     unfold has_opt_type.
     auto.
   Qed.
-  Hint Resolve has_opt_type_None : core.
+  Global Hint Resolve has_opt_type_None : core.
 
   Lemma has_opt_type_None_skip :
     forall G e,
@@ -1262,7 +1262,7 @@ Module has_type.
     unfold has_opt_type.
     auto.
   Qed.
-  Hint Resolve has_opt_type_None_skip : core.
+  Global Hint Resolve has_opt_type_None_skip : core.
 
   Lemma has_opt_type_Some :
     forall G e ty,
@@ -1281,7 +1281,7 @@ Module has_type.
     simpl.
     auto.
   Qed.
-  Hint Resolve has_opt_type_Some_intro : core.
+  Global Hint Resolve has_opt_type_Some_intro : core.
 
   Lemma has_opt_type_empty :
     forall Gs rho G,
@@ -1435,7 +1435,7 @@ Module has_type.
   Qed.
 
   Create HintDb subst_db.
-  Hint Resolve big_join.extend has_opt_type_extend big_joinable.extend
+  Global Hint Resolve big_join.extend has_opt_type_extend big_joinable.extend
                big_join.extend2 has_opt_type_extend2 big_joinable.extend2
                big_joinable.project big_join.project_joinable
                big_join.length big_joinable.project eq_sym
@@ -1550,7 +1550,7 @@ Module step.
       t e1 e1' ->
       t (expr.let_tt e1 e2) (expr.let_tt e1' e2)
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Definition star : expr.t -> expr.t -> Prop := clos_refl_trans_n1 _ t.
 
@@ -1612,7 +1612,7 @@ Module step.
     constructor.
   Qed.
 
-  Hint Resolve star_app2 star_app1 star_refl : core.
+  Global Hint Resolve star_app2 star_app1 star_refl : core.
 End step.
 
 Ltac break_join :=

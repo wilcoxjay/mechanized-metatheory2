@@ -180,7 +180,7 @@ Module type.
    Notation exist := type_ast.exist.
    Notation bool := type_ast.bool.
 
-   Hint Resolve wf_shift' wf_subst : core.
+   Global Hint Resolve wf_shift' wf_subst : core.
 End type.
 
 Module expr_abt := abt.abt exprop.
@@ -396,7 +396,7 @@ Module has_type.
       t n G e3 ty ->
       t n G (expr.If e1 e2 e3) ty
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Lemma t_type_wf :
     forall n G e ty,
@@ -585,7 +585,7 @@ Module has_type.
   Proof.
     auto.
   Qed.
-  Hint Resolve t_type_wf_S_all t_type_wf_S_exist : core.
+  Global Hint Resolve t_type_wf_S_all t_type_wf_S_exist : core.
 
   Lemma tysubst :
     forall n G e ty,
@@ -672,7 +672,7 @@ Module value.
   | tt : t expr.tt
   | ff : t expr.ff
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 End value.
 
 Module step.
@@ -710,7 +710,7 @@ Module step.
       t e1 e1' ->
       t (expr.If e1 e2 e3) (expr.If e1' e2 e3)
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Definition star : expr.t -> expr.t -> Prop := clos_refl_trans_n1 _ t.
 
@@ -721,7 +721,7 @@ Module step.
     constructor.
   Qed.
 
-  Hint Resolve star_refl : core.
+  Global Hint Resolve star_refl : core.
 
   Lemma step_l :
     forall e1 e2 e3,

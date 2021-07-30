@@ -374,7 +374,7 @@ Module step.
         t (h, e2) (h', e2') ->
         t (h, expr.assign v e2) (h', expr.assign v e2')
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Definition star : _ -> _ -> Prop := clos_refl_trans_n1 _ t.
 
@@ -457,7 +457,7 @@ Module step.
     constructor.
   Qed.
 
-  Hint Resolve star_app2 star_app1 star_refl : core.
+  Global Hint Resolve star_app2 star_app1 star_refl : core.
 
   Lemma value :
     forall v,

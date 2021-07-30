@@ -4,7 +4,7 @@ Require Export Relations.Relations.
 Export ListNotations.
 Set Implicit Arguments.
 
-Hint Constructors Forall Forall2 : core.
+Global Hint Constructors Forall Forall2 : core.
 
 Ltac break_match :=
   match goal with
@@ -400,7 +400,7 @@ Section Forall3.
     congruence.
   Qed.
 End Forall3.
-Hint Constructors Forall3 : core.
+Global Hint Constructors Forall3 : core.
 
 Lemma Forall3_map1 :
   forall A A' B C (P : A -> B -> C -> Prop) (f : A' -> A) l1 l2 l3,
@@ -445,26 +445,26 @@ Qed.
 
 Inductive and3 (P1 P2 P3 : Prop) : Prop :=
   And3 : P1 -> P2 -> P3 -> and3 P1 P2 P3.
-Hint Constructors and3 : core.
+Global Hint Constructors and3 : core.
 
 Inductive and4 (P1 P2 P3 P4 : Prop) : Prop :=
   And4 : P1 -> P2 -> P3 -> P4 -> and4 P1 P2 P3 P4.
-Hint Constructors and4 : core.
+Global Hint Constructors and4 : core.
 
 Inductive and5 (P1 P2 P3 P4 P5 : Prop) : Prop :=
   And5 : P1 -> P2 -> P3 -> P4 -> P5 -> and5 P1 P2 P3 P4 P5.
-Hint Constructors and5 : core.
+Global Hint Constructors and5 : core.
 
 Inductive or3 (P1 P2 P3 : Prop) : Prop := Or31 : P1 -> or3 P1 P2 P3
                                   | Or32 : P2 -> or3 P1 P2 P3
                                   | Or33 : P3 -> or3 P1 P2 P3.
-Hint Constructors or3 : core.
+Global Hint Constructors or3 : core.
 
 Inductive or4 (P1 P2 P3 P4 : Prop) : Prop := Or41 : P1 -> or4 P1 P2 P3 P4
                                      | Or42 : P2 -> or4 P1 P2 P3 P4
                                      | Or43 : P3 -> or4 P1 P2 P3 P4
                                      | Or44 : P4 -> or4 P1 P2 P3 P4.
-Hint Constructors or4 : core.
+Global Hint Constructors or4 : core.
 
 Notation "[ /\ P1 & P2 ]" := (and P1 P2) (only parsing) : type_scope.
 Notation "[ /\ P1 , P2 & P3 ]" := (and3 P1 P2 P3) : type_scope.
@@ -918,7 +918,7 @@ Proof.
   - destruct l; [now auto|].
     destruct o; auto.
 Qed.
-Hint Resolve Forall3_project : core.
+Global Hint Resolve Forall3_project : core.
 
 Lemma partial_zip_project :
   forall A B (f : option A -> B -> option (option A)) l1 l2 l3,

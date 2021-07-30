@@ -257,7 +257,7 @@ Module wc.
       t C e3 cat.EXPR ->
       t C (term.If e1 e2 e3) cat.EXPR
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Lemma t_wf :
     forall C e c,
@@ -712,7 +712,7 @@ Module has_type.
       t G e3 ty ->
       t G (term.If e1 e2 e3) ty
   .
-  Hint Constructors t : core.
+  Global Hint Constructors t : core.
 
   Lemma t_wc_e :
     forall G e ty,
